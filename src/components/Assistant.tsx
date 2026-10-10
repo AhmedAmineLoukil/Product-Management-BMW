@@ -16,8 +16,8 @@ export default function Assistant(){
  const send=async(raw:string)=>{
   const q=raw.trim();if(!q||busy)return;
   setQuestion('');setMessages(old=>[...old,{role:'user',text:q}]);setBusy(true);
+  const context=buildAssistantContext(state,project,q);
   try{
-   const context=buildAssistantContext(state,project,q);
    let answer:AssistantAnswer;let mode:'AI'|'Offline guide'='Offline guide';
    if(liveAssistant){
     const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(context)});
@@ -27,7 +27,10 @@ export default function Assistant(){
    const allowed=new Map(context.sources.map(s=>[s.id,s.text]));
    if(answer.citations.some(c=>!allowed.get(c.source_id)?.includes(c.quote)))throw new Error('The answer included an invalid citation.');
    setMessages(old=>[...old,{role:'assistant',text:answer.answer,answer,mode}]);
-  }catch(error){setMessages(old=>[...old,{role:'assistant',text:(error as Error).message+' Try again, or inspect the evidence directly.',mode:'Offline guide'}]);}
+  }catch(error){
+   const fallback=offlineAssistantAnswer(context);
+   setMessages(old=>[...old,{role:'assistant',text:`Live AI unavailable: ${(error as Error).message}\n\n${fallback.answer}`,answer:fallback,mode:'Offline guide'}]);
+  }
   finally{setBusy(false);}
  };
  return <div className="assistant-root">

@@ -30,6 +30,11 @@ PRESETS = {
     ('G70', 'China'): 'https://www.press.bmwgroup.com/global/article/detail/T0380173EN/the-new-bmw-7-series?language=en',
 }
 MARKETS = {'Europe', 'United States', 'China'}
+SUPPORTED_MODEL_MARKETS = {
+    ('F70', market) for market in MARKETS
+} | {
+    ('G70', market) for market in MARKETS
+} | {('G60', 'Europe'), ('G60', 'United States'), ('G68', 'China')}
 NHTSA_MODELS = {
     ('G60', 2024): {'530I', '540I', 'I5'}, ('G60', 2025): {'I5'},
     ('G70', 2024): {'I7 SEDAN'}, ('G70', 2025): {'I7'},
@@ -269,8 +274,8 @@ def _nhtsa(model_code: str, model: str, year: int, *, session=None) -> dict:
 
 
 def collect(url: str | None, model_code: str, market: str, *, source='bmw', model_year=2025, nhtsa_model=None, session=None, use_cache=True) -> dict:
-    if model_code not in {'F70', 'G60', 'G68', 'G70'}:
-        raise ValueError('Choose F70, G60, G68, or G70.')
+    if (model_code, market) not in SUPPORTED_MODEL_MARKETS:
+        raise ValueError('Choose 1, 5, or 7 Series and a matching Europe, United States, or China market.')
     if market not in MARKETS:
         raise ValueError('Choose Europe, United States, or China.')
     if source not in ('bmw', 'nhtsa'):

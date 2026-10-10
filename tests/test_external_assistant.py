@@ -24,6 +24,8 @@ class ExternalSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):collector.extract_page(REVIEW_HTML, 'https://example.org/a', 'F70', 'Europe')
         with self.assertRaises(ValueError):collector._public_url('http://127.0.0.1/a')
         with self.assertRaises(ValueError):collector._public_url('https://localhost/a')
+        with self.assertRaises(ValueError):collector.collect(None, 'G68', 'Europe')
+        with self.assertRaises(ValueError):collector.collect(None, 'G60', 'China')
 
     def test_press_keywords_and_visible_date_identify_g68(self):
         html = '''<html><head><meta name="keywords" content="5 Series,Long Wheelbase,G68"></head>

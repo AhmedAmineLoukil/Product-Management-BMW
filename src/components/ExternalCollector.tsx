@@ -6,6 +6,7 @@ import {uid} from '../lib/workspace';
 import {Button} from './ui/button';
 import {Panel} from './common';
 import {analysisMarkets,pressPages,researchLibraries,type AnalysisMarket} from '../data/publicSources';
+import {modelFor,seriesChoices,seriesFor,type Series} from '../lib/vehicle-series';
 
 type Collected={source_id:string;model_code:string;requested_market:string;source_market:string;source_type:string;source_url:string;title:string;published_at:string|null;retrieved_at:string;text_original:string;model_match:string;model_match_quality:string;components?:string;query_url?:string;nhtsa_product_model?:string};
 type Result={model_code:string;market:string;source_url:string;records:Collected[];warning:string;cached:boolean};
@@ -14,8 +15,9 @@ const nhtsaModels:Record<string,string[]>={'G60:2024':['530I','540I','I5'],'G60:
 
 export default function ExternalCollector(){
  const {state,project,run,setProject,notify}=useApp();
- const [code,setCode]=useState(()=>Object.keys(names).find(value=>project.derivative.includes(value))??'F70');
+ const [series,setSeries]=useState<Series>(()=>seriesFor(project.derivative)??'1');
  const [market,setMarket]=useState<AnalysisMarket>(()=>analysisMarkets.includes(project.market as AnalysisMarket)?project.market as AnalysisMarket:'Europe');
+ const code=modelFor(series,market);
  const [source,setSource]=useState<'bmw'|'nhtsa'|'custom'>('bmw');
  const [url,setUrl]=useState(''),[year,setYear]=useState(2025),[nhtsaModel,setNhtsaModel]=useState('I5');
  const [loading,setLoading]=useState(false),[result,setResult]=useState<Result|null>(null);
@@ -44,12 +46,13 @@ export default function ExternalCollector(){
  };
  return <Panel title="Public evidence finder" subtitle="Official sources matched to the challenge vehicles and markets">
   <div className="collector-grid">
-   <label className="field"><span>Vehicle</span><select aria-label="Collector vehicle code" value={code} onChange={e=>{setCode(e.target.value);setResult(null);}}>{Object.entries(names).map(([key,name])=><option key={key} value={key}>{name}</option>)}</select></label>
+   <label className="field"><span>Series</span><select aria-label="Collector series" value={series} onChange={e=>{setSeries(e.target.value as Series);setResult(null);}}>{seriesChoices.map(value=><option key={value} value={value}>BMW {value} Series</option>)}</select></label>
    <label className="field"><span>Market</span><select aria-label="Collector market" value={market} onChange={e=>{setMarket(e.target.value as AnalysisMarket);setResult(null);}}>{analysisMarkets.map(value=><option key={value} value={value}>{value}</option>)}</select></label>
    <label className="field"><span>Source</span><select aria-label="Public source" value={activeSource} onChange={e=>{setSource(e.target.value as typeof source);setResult(null);}}>{pressUrl&&<option value="bmw">BMW PressClub official page</option>}{canNhtsa&&<option value="nhtsa">NHTSA owner complaints API</option>}<option value="custom">Other public HTTPS page</option></select></label>
    {activeSource==='nhtsa'&&<><label className="field"><span>US model name</span><select aria-label="NHTSA model" value={modelChoices.includes(nhtsaModel)?nhtsaModel:modelChoices[0]} onChange={e=>setNhtsaModel(e.target.value)}>{modelChoices.map(value=><option key={value} value={value}>{value}</option>)}</select></label><label className="field"><span>Model year</span><select aria-label="NHTSA model year" value={year} onChange={e=>setYear(Number(e.target.value))}>{[2024,2025].map(value=><option key={value} value={value}>{value}</option>)}</select></label></>}
    {activeSource==='custom'&&<label className="field collector-url"><span>Public page URL</span><input aria-label="Public review URL" type="url" placeholder="https://…" value={url} onChange={e=>{setUrl(e.target.value);setResult(null);}}/></label>}
   </div>
+  <p className="small muted">Source model for this selection: {names[code]}. The 5 Series uses G68 in China and G60 in Europe and the United States.</p>
   {pressUrl&&activeSource==='bmw'&&<p className="small muted">Selected page: <a href={pressUrl} target="_blank" rel="noreferrer">BMW PressClub <ExternalLink size={12}/></a>. This is manufacturer context, not a customer review.</p>}
   {activeSource==='nhtsa'&&<p className="small muted">NHTSA uses US sales model names, not BMW chassis codes. Review the match before using a report as G60 or G70 evidence. No VIN is imported.</p>}
   <div className="collector-actions"><Button variant="outline" onClick={()=>void collect()} disabled={loading||(activeSource==='custom'&&!url.trim())}>{loading?<Loader2 size={15} className="spin"/>:<Globe2 size={15}/>} {loading?'Checking source…':'Fetch and preview source'}</Button><span>Public HTTPS · one request per host per second · 24-hour cache</span></div>

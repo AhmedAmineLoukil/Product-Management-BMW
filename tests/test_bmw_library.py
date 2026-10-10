@@ -45,6 +45,10 @@ class BmwLibraryTests(unittest.TestCase):
             self.skipTest('Private BMW files are not present in ignored data/raw/.')
         source = bmw_library.manifest()
         by_scope = {(s['model_code'], s['market_code']): s for s in source['scopes']}
+        self.assertEqual(len(source['scopes']), 9)
+        self.assertEqual({s['series'] for s in source['scopes']}, {'1', '5', '7'})
+        self.assertNotIn(('G60', 'CN'), by_scope)
+        self.assertNotIn(('G68', 'EU'), by_scope)
         self.assertEqual({market for _, market in by_scope}, {'EU', 'US', 'CN'})
         self.assertGreater(by_scope[('F70', 'EU')]['counts']['feedback'], 0)
         self.assertGreater(by_scope[('F70', 'EU')]['counts']['equipment'], 0)
@@ -62,6 +66,8 @@ class BmwLibraryTests(unittest.TestCase):
         combined = [r for d in cn['datasets'] if d['kind'] == 'sales' for r in d['records']]
         self.assertTrue(combined and all(r['fields']['combined_model_scope'] for r in combined))
         self.assertTrue(any(r['fields']['future_value'] for r in combined))
+        with self.assertRaises(ValueError):
+            bmw_library.load_scope('G60', 'CN')
 
 
 if __name__ == '__main__':

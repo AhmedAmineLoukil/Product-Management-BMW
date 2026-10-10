@@ -27,4 +27,13 @@ describe('assistant project grounding',()=>{
    expect(source?.text).toContain(citation.quote);
   }
  });
+ it('answers from selected records even before requirements exist',()=>{
+  const state=createSeed(),project=state.projects[0];
+  state.requirements=[];state.findings=[];
+  const context=buildAssistantContext(state,project,'What is here?');
+  const answer=offlineAssistantAnswer(context);
+  expect(answer.citations.length).toBeGreaterThan(0);
+  expect(answer.answer).toContain('no drafted requirements');
+  expect(answer.citations.every(c=>context.sources.some(s=>s.id===c.source_id&&s.text.includes(c.quote)))).toBe(true);
+ });
 });

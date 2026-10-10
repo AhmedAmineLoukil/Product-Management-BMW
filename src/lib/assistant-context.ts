@@ -28,7 +28,9 @@ export function buildAssistantContext(state:Workspace,project:Project,question:s
  const sourceIds=new Set(findings.flatMap(f=>[...f.sources,...f.contradictions]));
  const datasets=state.datasets.filter(d=>d.projectId===project.id);
  const records=datasets.flatMap(d=>d.records.map(r=>({r,d})));
- const chosen=records.map(x=>({...x,score:relevant(question,`${x.r.id} ${x.r.content} ${x.d.type} ${x.d.name} ${x.r.category??''}`)+(sourceIds.has(x.r.id)?5:0)})).sort((a,b)=>b.score-a.score).filter(x=>x.score>0).slice(0,8);
+ const scored=records.map(x=>({...x,score:relevant(question,`${x.r.id} ${x.r.content} ${x.d.type} ${x.d.name} ${x.r.category??''}`)+(sourceIds.has(x.r.id)?5:0)})).sort((a,b)=>b.score-a.score);
+ // General questions still need a few inspectable sources, including before analysis exists.
+ const chosen=(scored.some(x=>x.score>0)?scored.filter(x=>x.score>0):scored).slice(0,8);
  return {
   question:question.trim(),project:{id:project.id,derivative:project.derivative,market:project.market,horizon:project.horizon},
   requirements:selectedReqs.map(r=>({id:r.id,title:r.title,statement:r.statement,status:r.status,category:r.category,
@@ -47,7 +49,11 @@ export function offlineAssistantAnswer(context:AssistantContext):AssistantAnswer
   const references=context.sources.filter(s=>s.source_type!=='Customer verbatims').slice(0,3);
   if(references.length)return {answer:`I found ${references.length} source record(s) for ${context.project.derivative} in ${context.project.market}. Open the citations to inspect the exact measures and caveats before using them in a PM decision.`,citations:references.map(s=>({source_id:s.id,quote:s.text.slice(0,180)})),uncertainty:'Study scales, shared model sales, publication dates, and market applicability must be checked in the original records.'};
  }
- if(!r)return {answer:`There are no requirements for ${context.project.derivative} in ${context.project.market} yet. Import feedback and run an analysis first.`,citations:[],uncertainty:'No project evidence is available.'};
+ if(!r){
+  const sources=context.sources.slice(0,3);
+  if(sources.length)return {answer:`This project has ${sources.length} selected source record(s) to inspect, but no drafted requirements yet. The records below are context, not an approved customer requirement. Run feedback analysis to draft findings and requirements.`,citations:sources.map(s=>({source_id:s.id,quote:s.text.slice(0,180)})).filter(c=>c.quote),uncertainty:'No project requirement has been reviewed or approved.'};
+  return {answer:`There are no requirements for ${context.project.derivative} in ${context.project.market} yet. Import feedback and run an analysis first.`,citations:[],uncertainty:'No project evidence is available.'};
+ }
  const status=r.score===null?'Its priority is unscored because some PM ratings are still unknown.':`Its current score is ${r.score} (${r.priority}).`;
  const linked=new Set(context.findings.filter(f=>r.finding_ids.includes(f.id)).flatMap(f=>[...f.source_ids,...f.contradictions]));
  const citations=context.sources.filter(s=>linked.has(s.id)).slice(0,3).map(s=>({source_id:s.id,quote:s.text.slice(0,180)})).filter(c=>c.quote);

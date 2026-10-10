@@ -44,6 +44,14 @@ DATASET_NAMES = {
 # EU totals and country-level feedback must never be presented as the same granularity.
 ANALYSIS_MARKETS = {'EU': 'Europe', 'US': 'United States', 'CN': 'China'}
 EUROPE_SOURCE_CODES = {'EU', 'GB', 'SE', 'FR', 'DK', 'FI', 'DE'}
+SERIES_MODELS = {
+    '1': {'EU': 'F70', 'US': 'F70', 'CN': 'F70'},
+    '5': {'EU': 'G60', 'US': 'G60', 'CN': 'G68'},
+    '7': {'EU': 'G70', 'US': 'G70', 'CN': 'G70'},
+}
+SUPPORTED_SCOPES = {(model, market): series
+                    for series, markets in SERIES_MODELS.items()
+                    for market, model in markets.items()}
 
 
 def _belongs_to_market(source_code: str, analysis_code: str) -> bool:
@@ -292,11 +300,11 @@ def manifest() -> dict:
     available = {key: (RAW / name).exists() for key, name in FILES.items()}
     data = _all()
     scopes = []
-    for model in VEHICLES:
-        for market in ANALYSIS_MARKETS:
+    for series, markets in SERIES_MODELS.items():
+        for market, model in markets.items():
             counts = {kind: len(_regional_records(mapping, model, market)) for kind, mapping in data.items()}
             if any(counts.values()):
-                scopes.append({'model_code': model, 'vehicle': VEHICLES[model],
+                scopes.append({'series': series, 'model_code': model, 'vehicle': VEHICLES[model],
                                'market_code': market, 'market': ANALYSIS_MARKETS[market], 'counts': counts})
     return {
         'files': [{'kind': key, 'name': name, 'available': available[key]}
@@ -305,7 +313,7 @@ def manifest() -> dict:
         'notes': [
             'Europe combines country-specific feedback with Europe-wide studies and sales; each record retains its original market and granularity. No German F70 verbatims are supplied.',
             'G60/G68 sales are one combined series total. Do not attribute the total to either model alone.',
-            'G68 is a China-specific long-wheelbase model. Other-market G68 rows in the combined sales sheet are series totals, not proof of local G68 sales.',
+            'The 5 Series uses G60 for Europe and United States, and G68 for China. Combined G60/G68 sales remain a series total.',
             'F70 United States and China scopes have sales rows only; market availability and relevance require separate verification.',
             'The option catalog is a German-market F70 source. The curated feature labels need PM verification.',
             'Study mean ratings and US response fractions are different measures. 2030 sales are future-looking.',
@@ -314,8 +322,8 @@ def manifest() -> dict:
 
 
 def load_scope(model_code: str, market_code: str) -> dict:
-    if model_code not in VEHICLES or market_code not in ANALYSIS_MARKETS:
-        raise ValueError('Choose a vehicle and market shown in the BMW data library.')
+    if (model_code, market_code) not in SUPPORTED_SCOPES:
+        raise ValueError('Choose Series 1, 5, or 7 and a supported market shown in the BMW data library.')
     data = _all()
     datasets = []
     for kind, mapping in data.items():
@@ -330,6 +338,6 @@ def load_scope(model_code: str, market_code: str) -> dict:
         })
     if not datasets:
         raise ValueError('No supplied BMW records match that vehicle and market.')
-    return {'model_code': model_code, 'vehicle': VEHICLES[model_code],
+    return {'series': SUPPORTED_SCOPES[(model_code, market_code)], 'model_code': model_code, 'vehicle': VEHICLES[model_code],
             'market_code': market_code, 'market': ANALYSIS_MARKETS[market_code],
             'datasets': datasets, 'record_count': sum(len(d['records']) for d in datasets)}
