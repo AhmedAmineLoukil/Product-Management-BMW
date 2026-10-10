@@ -25,14 +25,15 @@ def _save(conn, req):
         (req.requirement_id, req.model_dump_json()),
     )
 
-def list_requirements(vehicle=None, market=None, status=None):
+def list_requirements(vehicle=None, market=None, status=None, category=None):
     with get_conn() as conn:
         rows = conn.execute("SELECT data FROM requirements").fetchall()
     reqs = [Requirement.model_validate_json(r["data"]) for r in rows]
     if vehicle: reqs = [r for r in reqs if r.vehicle == vehicle]
     if market:  reqs = [r for r in reqs if r.market == market]
     if status:  reqs = [r for r in reqs if r.decision_status == status]
-    if category: reqs = [r for r in reqs if r.category == category]
+    if category:
+        reqs = [r for r in reqs if r.category == category]
     return sorted(reqs, key=lambda r: r.priority_score, reverse=True)
 
 def get_requirement(rid):

@@ -5,6 +5,7 @@ from src.backend.services import requirement_service as rs
 from src.backend.services import analysis_service
 from src.backend.services.audit_service import get_history
 from typing import Literal, get_args
+from src.backend.schemas import ReviewAction, EditRequest, Category
 
 init_db()
 app = FastAPI(title="BMW Requirements Backend")
