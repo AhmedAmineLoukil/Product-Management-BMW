@@ -19,6 +19,13 @@ describe('assistant project grounding',()=>{
   expect(answer.decision_gate).toContain('PM');
   expect(answer.next_actions?.length).toBeGreaterThan(0);
  });
+ it('keeps casual greetings small for the live assistant',()=>{
+  const state=createSeed(),project=state.projects[0];
+  const context=buildAssistantContext(state,project,'hey');
+  expect(context.requirements).toHaveLength(0);
+  expect(context.findings).toHaveLength(0);
+  expect(context.sources).toHaveLength(0);
+ });
  it('does not borrow evidence from another project',()=>{
   const state=createSeed(),project=state.projects[1];
   const context=buildAssistantContext(state,project,'What supports REQ-002?');

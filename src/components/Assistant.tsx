@@ -43,7 +43,7 @@ export default function Assistant(){
    const allowed=new Map(context.sources.map(s=>[s.id,s.text]));
    if(answer.citations.some(c=>!allowed.get(c.source_id)?.includes(c.quote)))throw new Error('The answer included an invalid citation.');
    setMessages(old=>[...old,{role:'assistant',text:answer.answer,answer,mode}]);
-  }catch(error){setMessages(old=>[...old,{role:'assistant',text:(error as Error).message+' Try again, or inspect the evidence directly.',mode:'Offline guide'}]);}
+  }catch(error){setMessages(old=>[...old,{role:'assistant',text:(error as Error).message+' Try again, or inspect the evidence directly.',mode:liveAssistant?'AI':'Offline guide'}]);}
   finally{setBusy(false);}
  };
  return <div className="assistant-root">

@@ -68,4 +68,10 @@ class AssistantTests(unittest.TestCase):
         client=Mock();client.responses.parse.return_value=self.response('invented claim')
         with self.assertRaises(ValueError):answer_question(self.payload(),client=client)
 
+    def test_incomplete_response_names_token_limit(self):
+        client=Mock()
+        client.responses.parse.return_value=SimpleNamespace(status='incomplete',output_parsed=None,incomplete_details={'reason':'max_output_tokens'})
+        with self.assertRaisesRegex(ValueError,'output-token limit'):
+            answer_question(self.payload(),client=client)
+
 if __name__=='__main__':unittest.main()

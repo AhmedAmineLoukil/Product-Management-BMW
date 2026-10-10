@@ -30,20 +30,22 @@ export interface AssistantContext {
 }
 const words=(text:string)=>[...new Set((text.toLowerCase().match(/[\p{L}\p{N}-]+/gu)??[]).filter(w=>w.length>2))];
 const relevant=(query:string,text:string)=>{const hay=text.toLowerCase();return words(query).reduce((score,term)=>score+(hay.includes(term)?1:0),0)+(hay.includes(query.toLowerCase())?5:0);};
+const casualQuestion=(question:string)=>/^(hi|hey|hello|yo|thanks|thank you|ok|okay)[\s!.?]*$/i.test(question.trim());
 
 export function buildAssistantContext(state:Workspace,project:Project,question:string):AssistantContext {
  const reqs=state.requirements.filter(r=>r.projectId===project.id);
  const readiness=computeReadiness(state,project);
  const audit=state.audit.filter(a=>a.projectId===project.id).sort((a,b)=>b.at.localeCompare(a.at));
+ const casual=casualQuestion(question);
  const asksTop=/\b(top|highest)\b/i.test(question);
  const asksUnknown=/\b(unknown|unscored|missing)\b|need.*judgment/i.test(question);
  const ranked=reqs.map(r=>({r,score:relevant(question,`${r.id} ${r.title} ${r.statement} ${r.category}`)})).sort((a,b)=>
   asksTop?(scoreRequirement(b.r.scores,state.model)??-1)-(scoreRequirement(a.r.scores,state.model)??-1):
   asksUnknown?Number(scoreRequirement(a.r.scores,state.model)!==null)-Number(scoreRequirement(b.r.scores,state.model)!==null):
   b.score-a.score);
- const selectedReqs=ranked.slice(0,3).map(x=>x.r);
+ const selectedReqs=casual?[]:ranked.slice(0,3).map(x=>x.r);
  const linkedIds=new Set(selectedReqs.flatMap(r=>r.findings));
- const findings=state.findings.filter(f=>f.projectId===project.id).map(f=>({f,score:relevant(question,`${f.id} ${f.title} ${f.description}`)+(linkedIds.has(f.id)?4:0)})).sort((a,b)=>b.score-a.score).slice(0,6).map(x=>x.f);
+ const findings=casual?[]:state.findings.filter(f=>f.projectId===project.id).map(f=>({f,score:relevant(question,`${f.id} ${f.title} ${f.description}`)+(linkedIds.has(f.id)?4:0)})).sort((a,b)=>b.score-a.score).slice(0,6).map(x=>x.f);
  const sourceIds=new Set(findings.flatMap(f=>[...f.sources,...f.contradictions]));
  const datasets=state.datasets.filter(d=>d.projectId===project.id);
  const records=datasets.flatMap(d=>d.records.map(r=>({r,d})));

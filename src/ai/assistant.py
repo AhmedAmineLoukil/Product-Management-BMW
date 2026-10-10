@@ -20,6 +20,24 @@ class AssistantDraft(BaseModel):
     decision_gate: str = ''
 
 
+def _bounded_int(name, default, minimum, maximum):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f'{name} must be an integer.') from exc
+    return min(maximum, max(minimum, value))
+
+
+def _incomplete_reason(response) -> str:
+    details = getattr(response, 'incomplete_details', None)
+    if isinstance(details, dict):
+        return str(details.get('reason') or '')
+    return str(getattr(details, 'reason', '') or '')
+
+
 def answer_question(payload: dict, *, client=None) -> dict:
     if not isinstance(payload, dict):
         raise ValueError('Invalid assistant request.')
@@ -45,6 +63,7 @@ def answer_question(payload: dict, *, client=None) -> dict:
     if client is None:
         from openai import OpenAI
         client = OpenAI(timeout=45, max_retries=1)
+    max_output_tokens = _bounded_int('OPENAI_CHAT_MAX_OUTPUT_TOKENS', 2_500, 800, 6_000)
     response = client.responses.parse(
         model=os.getenv('OPENAI_CHAT_MODEL', 'gpt-5-mini'),
         text_format=AssistantDraft,
@@ -57,14 +76,21 @@ def answer_question(payload: dict, *, client=None) -> dict:
             'Explain unknown score dimensions without inventing ratings. The assistant cannot approve, reject, edit or challenge requirements. '
             'For hackathon readiness questions, use the supplied readiness and audit_summary fields to explain strengths, gaps and PM gates. '
             'Return concise next_actions and risk_flags when useful. Use decision_gate to name the mandatory human decision point. '
-            'Keep the answer concise and explain uncertainty in plain language. Return citations as separate structured entries; no inline citations.'
+            'For greetings or vague questions, answer briefly and ask what requirement, evidence, gap or PM decision the user wants to inspect. '
+            'Keep answer under 140 words, with at most three citations, three next_actions and three risk_flags. '
+            'Return citations as separate structured entries; no inline citations.'
         ),
         input=json.dumps(payload, ensure_ascii=False),
         store=False,
-        max_output_tokens=1_200,
+        max_output_tokens=max_output_tokens,
     )
-    if getattr(response, 'status', 'completed') != 'completed' or response.output_parsed is None:
-        raise ValueError('The assistant returned an incomplete response.')
+    if getattr(response, 'status', 'completed') != 'completed':
+        reason = _incomplete_reason(response)
+        if reason == 'max_output_tokens':
+            raise ValueError('The live assistant hit its output-token limit. Ask a narrower question or increase OPENAI_CHAT_MAX_OUTPUT_TOKENS, then restart the dev server.')
+        raise ValueError(f'The live assistant did not complete{f" ({reason})" if reason else ""}. Try again.')
+    if response.output_parsed is None:
+        raise ValueError('The live assistant returned an unparseable structured response. Try a narrower question.')
     draft = AssistantDraft.model_validate(response.output_parsed)
     if len(draft.answer) > 3_000 or len(draft.citations) > 8 or len(draft.next_actions) > 6 or len(draft.risk_flags) > 6:
         raise ValueError('The assistant response exceeded its limits.')
