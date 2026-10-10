@@ -40,6 +40,28 @@ DATASET_NAMES = {
     'feedback': 'Customer verbatims', 'studies': 'Customer study',
     'sales': 'Sales volumes', 'equipment': 'Equipment list',
 }
+# Analysis markets from the challenge. Country labels below remain source provenance;
+# EU totals and country-level feedback must never be presented as the same granularity.
+ANALYSIS_MARKETS = {'EU': 'Europe', 'US': 'United States', 'CN': 'China'}
+EUROPE_SOURCE_CODES = {'EU', 'GB', 'SE', 'FR', 'DK', 'FI', 'DE'}
+
+
+def _belongs_to_market(source_code: str, analysis_code: str) -> bool:
+    return source_code in EUROPE_SOURCE_CODES if analysis_code == 'EU' else source_code == analysis_code
+
+
+def _regional_records(mapping: dict[tuple[str, str], list[dict]], model: str, market: str) -> list[dict]:
+    records = []
+    for (source_model, source_market), rows in mapping.items():
+        if source_model != model or not _belongs_to_market(source_market, market):
+            continue
+        for row in rows:
+            records.append({**row, 'fields': {
+                **row['fields'], 'analysis_market_code': market,
+                'analysis_market_label': ANALYSIS_MARKETS[market],
+                'source_market_granularity': 'regional' if source_market == 'EU' else 'country',
+            }})
+    return records
 
 
 def _id(prefix: str, *parts: object) -> str:
@@ -269,22 +291,22 @@ def _all() -> dict[str, dict[tuple[str, str], list[dict]]]:
 def manifest() -> dict:
     available = {key: (RAW / name).exists() for key, name in FILES.items()}
     data = _all()
-    scopes: dict[tuple[str, str], dict] = {}
-    for kind, mapping in data.items():
-        for (model, market), records in mapping.items():
-            entry = scopes.setdefault((model, market), {
-                'model_code': model, 'vehicle': VEHICLES[model],
-                'market_code': market, 'market': MARKETS[market],
-                'counts': {key: 0 for key in DATASET_NAMES},
-            })
-            entry['counts'][kind] = len(records)
+    scopes = []
+    for model in VEHICLES:
+        for market in ANALYSIS_MARKETS:
+            counts = {kind: len(_regional_records(mapping, model, market)) for kind, mapping in data.items()}
+            if any(counts.values()):
+                scopes.append({'model_code': model, 'vehicle': VEHICLES[model],
+                               'market_code': market, 'market': ANALYSIS_MARKETS[market], 'counts': counts})
     return {
         'files': [{'kind': key, 'name': name, 'available': available[key]}
                   for key, name in FILES.items()],
-        'scopes': sorted(scopes.values(), key=lambda s: (list(VEHICLES).index(s['model_code']), s['market'])),
+        'scopes': scopes,
         'notes': [
-            'F70 feedback has country-specific comments; no German F70 verbatims are supplied.',
+            'Europe combines country-specific feedback with Europe-wide studies and sales; each record retains its original market and granularity. No German F70 verbatims are supplied.',
             'G60/G68 sales are one combined series total. Do not attribute the total to either model alone.',
+            'G68 is a China-specific long-wheelbase model. Other-market G68 rows in the combined sales sheet are series totals, not proof of local G68 sales.',
+            'F70 United States and China scopes have sales rows only; market availability and relevance require separate verification.',
             'The option catalog is a German-market F70 source. The curated feature labels need PM verification.',
             'Study mean ratings and US response fractions are different measures. 2030 sales are future-looking.',
         ],
@@ -292,22 +314,22 @@ def manifest() -> dict:
 
 
 def load_scope(model_code: str, market_code: str) -> dict:
-    if model_code not in VEHICLES or market_code not in MARKETS:
+    if model_code not in VEHICLES or market_code not in ANALYSIS_MARKETS:
         raise ValueError('Choose a vehicle and market shown in the BMW data library.')
     data = _all()
     datasets = []
     for kind, mapping in data.items():
-        records = mapping.get((model_code, market_code), [])
+        records = _regional_records(mapping, model_code, market_code)
         if not records:
             continue
         sources = sorted({str(record['fields']['source_file']) for record in records})
         datasets.append({
             'kind': kind, 'type': DATASET_NAMES[kind],
-            'name': f'BMW {model_code} {MARKETS[market_code]} · {DATASET_NAMES[kind]}',
+            'name': f'BMW {model_code} {ANALYSIS_MARKETS[market_code]} · {DATASET_NAMES[kind]}',
             'sources': sources, 'records': records,
         })
     if not datasets:
         raise ValueError('No supplied BMW records match that vehicle and market.')
     return {'model_code': model_code, 'vehicle': VEHICLES[model_code],
-            'market_code': market_code, 'market': MARKETS[market_code],
+            'market_code': market_code, 'market': ANALYSIS_MARKETS[market_code],
             'datasets': datasets, 'record_count': sum(len(d['records']) for d in datasets)}

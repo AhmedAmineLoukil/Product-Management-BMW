@@ -49,7 +49,7 @@ export function integratePythonResult(input:Workspace,projectId:string,datasetId
 export async function pythonAnalysis(state:Workspace,projectId:string,datasetIds:string[],onProgress:(p:LiveAnalysisProgress)=>void,batchIndex=0){
  const {project,records,datasets}=selectFeedback(state,projectId,datasetIds,batchIndex);
  onProgress({jobId:'local',stage:'extracting',progress:5,message:'Analyzing feedback, grouping signals and drafting requirements…'});
- const response=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:records.map(r=>({source_id:r.id,vehicle:project.derivative,market:project.market,text:r.content,source_file:datasets.find(d=>d.id===r.datasetId)?.name,source_location:`${r.sheet??'sheet'}!row ${r.row}`}))})});
+ const response=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records:records.map(r=>({source_id:r.id,vehicle:project.derivative,market:project.market,text:r.content,source_file:String(r.fields.source_file??datasets.find(d=>d.id===r.datasetId)?.name??'Unknown source'),source_location:`${r.fields.source_sheet??r.sheet??'sheet'}!row ${r.fields.source_row??r.row}`,metadata:{source_market_code:r.fields.source_market_code??null,source_market_label:r.fields.source_market_label??null,source_market_granularity:r.fields.source_market_granularity??null}}))})});
  const data=await response.json();if(!response.ok)throw new Error(data.error??'AI analysis failed.');
  onProgress({jobId:'local',stage:'committing',progress:95,message:'Checking evidence links…'});
  const next=integratePythonResult(state,projectId,datasetIds,data,batchIndex);

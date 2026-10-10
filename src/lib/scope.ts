@@ -10,6 +10,7 @@ const marketAliases:Record<string,string>={
 };
 const vehicleCode=(value:unknown)=>String(value??'').toUpperCase().match(/\b(F70|G60|G68|G70)\b/)?.[1]??'';
 const marketCode=(value:unknown)=>marketAliases[String(value??'').trim().toLowerCase()]??'';
+const europeSourceCodes=new Set(['EU','GB','SE','FR','DK','FI','DE']);
 
 /** Reject known mismatches; generic records without source scope remain a PM responsibility. */
 export function assertFeedbackScope(datasets:Dataset[],project:Project):void {
@@ -19,6 +20,7 @@ export function assertFeedbackScope(datasets:Dataset[],project:Project):void {
   const sourceVehicle=vehicleCode(fields.source_vehicle_code??fields['Derivate (e-code)']??fields.derivative??fields.vehicle);
   const sourceMarket=marketCode(fields.source_market_code??fields.Country??fields.country??fields.market??fields.region);
   if(sourceVehicle&&expectedVehicle&&sourceVehicle!==expectedVehicle)throw new Error(`Source ${record.id} belongs to ${sourceVehicle}, not ${project.derivative}. Choose the matching project.`);
-  if(sourceMarket&&expectedMarket&&sourceMarket!==expectedMarket)throw new Error(`Source ${record.id} belongs to market ${sourceMarket}, not ${project.market}. Choose the matching project.`);
+  const compatible=expectedMarket==='EU'?europeSourceCodes.has(sourceMarket):sourceMarket===expectedMarket;
+  if(sourceMarket&&expectedMarket&&!compatible)throw new Error(`Source ${record.id} belongs to market ${sourceMarket}, not ${project.market}. Choose the matching project.`);
  }
 }

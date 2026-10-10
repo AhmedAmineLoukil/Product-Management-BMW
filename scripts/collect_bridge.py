@@ -8,7 +8,9 @@ from src.backend.services.collector import collect
 if __name__ == '__main__':
     try:
         request = json.load(sys.stdin)
-        print(json.dumps(collect(request.get('url'), request.get('model_code'), request.get('market')), ensure_ascii=False))
+        print(json.dumps(collect(request.get('url'), request.get('model_code'), request.get('market'),
+                                 source=request.get('source', 'bmw'), model_year=request.get('model_year', 2025),
+                                 nhtsa_model=request.get('nhtsa_model')), ensure_ascii=False))
     except ValueError as exc:
         print(json.dumps({'error': str(exc)}))
         sys.exit(1)

@@ -14,17 +14,25 @@ import socket
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlencode
 from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
 
 PRESETS = {
-    'F70': 'https://www.press.bmwgroup.com/global/article/detail/T0442625EN/the-all-new-bmw-1-series',
-    'G60': 'https://www.press.bmwgroup.com/canada/article/detail/T0437821EN/market-launch-of-the-new-bmw-5-series-sedan-and-the-first-bmw-i5',
-    'G68': 'https://www.press.bmwgroup.com/global/article/detail/T0439257EN/market-launch-of-new-bmw-5-series-sedan-and-new-bmw-i5-sedan-from-china-for-china?language=en',
-    'G70': 'https://www.press.bmwgroup.com/global/article/detail/T0380173EN/the-new-bmw-7-series',
+    ('F70', 'Europe'): 'https://www.press.bmwgroup.com/global/article/detail/T0442625EN/the-all-new-bmw-1-series',
+    ('G60', 'Europe'): 'https://www.press.bmwgroup.com/global/article/detail/T0410858EN/digital-dynamic-and-now-also-fully-electric%3A-the-bmw-5-series-enters-a-new-era?language=en',
+    ('G60', 'United States'): 'https://www.press.bmwgroup.com/usa/article/detail/T0418778EN_US/the-all-new-2024-bmw-5-series?language=en_US',
+    ('G68', 'China'): 'https://www.press.bmwgroup.com/global/article/detail/T0439257EN/market-launch-of-new-bmw-5-series-sedan-and-new-bmw-i5-sedan-from-china-for-china?language=en',
+    ('G70', 'Europe'): 'https://www.press.bmwgroup.com/global/article/detail/T0380173EN/the-new-bmw-7-series?language=en',
+    ('G70', 'United States'): 'https://www.press.bmwgroup.com/usa/article/detail/T0382613EN_US/the-new-bmw-7-series?language=en_US',
+    ('G70', 'China'): 'https://www.press.bmwgroup.com/global/article/detail/T0380173EN/the-new-bmw-7-series?language=en',
+}
+MARKETS = {'Europe', 'United States', 'China'}
+NHTSA_MODELS = {
+    ('G60', 2024): {'530I', '540I', 'I5'}, ('G60', 2025): {'I5'},
+    ('G70', 2024): {'I7 SEDAN'}, ('G70', 2025): {'I7'},
 }
 USER_AGENT = 'BMWInsightPilotResearch/1.0 (public research; contact repo maintainers)'
 CACHE = Path('data/local/collector_cache')
@@ -132,7 +140,7 @@ def _clean(value):
 
 
 def extract_page(html: str, url: str, model_code: str, market: str) -> dict:
-    if model_code not in PRESETS:
+    if model_code not in {'F70', 'G60', 'G68', 'G70'}:
         raise ValueError('Choose F70, G60, G68, or G70.')
     soup = BeautifulSoup(html, 'html.parser')
     title = _clean((soup.find('h1') or soup.find('title')).get_text(' ', strip=True) if soup.find('h1') or soup.find('title') else '')
@@ -193,8 +201,16 @@ def extract_page(html: str, url: str, model_code: str, market: str) -> dict:
     for kind, body, date in candidates[:10]:
         text = body
         digest = hashlib.sha256((model_code + '\n' + market + '\n' + url + '\n' + text.casefold()).encode()).hexdigest()[:20]
+        verified_market = 'Not verified from page'
+        if PRESETS.get((model_code, market)) == url:
+            if market == 'United States' and '/usa/' in url:
+                verified_market = 'United States'
+            elif model_code == 'G68' and market == 'China':
+                verified_market = 'China'
+            else:
+                verified_market = 'Global announcement; check market variant'
         records.append({'source_id': 'WEB-' + digest, 'model_code': model_code,
-                        'requested_market': market, 'source_market': 'Not verified from page',
+                        'requested_market': market, 'source_market': verified_market,
                         'source_type': kind, 'source_url': url, 'title': title or url,
                         'published_at': date, 'retrieved_at': retrieved,
                         'text_original': text,
@@ -204,23 +220,86 @@ def extract_page(html: str, url: str, model_code: str, market: str) -> dict:
             'records': records, 'warning': 'External context only. Model and market applicability require PM review; do not treat this as BMW customer feedback.'}
 
 
-def collect(url: str | None, model_code: str, market: str, *, session=None, use_cache=True) -> dict:
-    if model_code not in PRESETS:
+def _nhtsa(model_code: str, model: str, year: int, *, session=None) -> dict:
+    """Fetch one explicit US make/model/year; do not infer a chassis from this API."""
+    if model not in NHTSA_MODELS.get((model_code, year), set()):
+        raise ValueError('Choose a supported US BMW model and model year.')
+    query = urlencode({'make': 'BMW', 'model': model, 'modelYear': year})
+    url = 'https://api.nhtsa.gov/complaints/complaintsByVehicle?' + query
+    _rate_limit('api.nhtsa.gov')
+    try:
+        response = (session or requests.Session()).get(url, headers={'User-Agent': USER_AGENT, 'Accept': 'application/json'}, timeout=15, allow_redirects=False)
+    except requests.RequestException as exc:
+        raise ValueError('The NHTSA complaints API is unavailable.') from exc
+    if response.status_code != 200 or len(response.content) > 3_000_000:
+        raise ValueError('The NHTSA complaints API returned an unsupported response.')
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise ValueError('The NHTSA response was not valid JSON.') from exc
+    if not isinstance(data.get('results'), list):
+        raise ValueError('The NHTSA response has no result list.')
+    now = datetime.now(timezone.utc).isoformat()
+    records = []
+    for item in data['results'][:100]:
+        odi = item.get('odiNumber')
+        summary = _clean(item.get('summary'))
+        if not odi or not summary:
+            continue
+        products = item.get('products') or []
+        accepted_models = {model, 'I7'} if model == 'I7 SEDAN' else {model}
+        if not products or not any(str(p.get('productMake', '')).upper() == 'BMW' and
+                                str(p.get('productModel', '')).upper() in accepted_models and
+                                str(p.get('productYear', '')) == str(year) for p in products):
+            continue
+        actual_model = next((str(p.get('productModel')) for p in products if str(p.get('productMake', '')).upper() == 'BMW'), model)
+        records.append({'source_id': f'NHTSA-ODI-{odi}', 'model_code': model_code,
+                        'requested_market': 'United States', 'source_market': 'United States',
+                        'source_type': 'us_owner_safety_complaint',
+                        'source_url': 'https://api.nhtsa.gov/complaints/odinumber?' + urlencode({'odinumber': odi}),
+                        'title': f'NHTSA ODI {odi} · BMW {model} {year}',
+                        'published_at': item.get('dateComplaintFiled'), 'retrieved_at': now,
+                        'text_original': summary, 'model_match': f'BMW {model} {year}',
+                        'model_match_quality': 'series_model_year_variant_unverified',
+                        'components': item.get('components'), 'query_url': url,
+                        'nhtsa_product_model': actual_model})
+    truncated = len(data['results']) > 100
+    return {'model_code': model_code, 'market': 'United States', 'source_url': url,
+            'records': records, 'warning': 'NHTSA owner reports are US safety complaints, not BMW-supplied feedback. NHTSA model names do not prove the exact BMW chassis code; verify each match before using it as product evidence.' + (' Only the first 100 API results are previewed.' if truncated else '')}
+
+
+def collect(url: str | None, model_code: str, market: str, *, source='bmw', model_year=2025, nhtsa_model=None, session=None, use_cache=True) -> dict:
+    if model_code not in {'F70', 'G60', 'G68', 'G70'}:
         raise ValueError('Choose F70, G60, G68, or G70.')
-    if not isinstance(market, str) or not market.strip() or len(market) > 80:
-        raise ValueError('Enter a market label.')
-    selected = url.strip() if isinstance(url, str) and url.strip() else PRESETS[model_code]
+    if market not in MARKETS:
+        raise ValueError('Choose Europe, United States, or China.')
+    if source not in ('bmw', 'nhtsa'):
+        raise ValueError('Choose a supported public source.')
+    if source == 'nhtsa' and (market != 'United States' or url):
+        raise ValueError('NHTSA complaints are available only for the United States market.')
+    selected = url.strip() if isinstance(url, str) and url.strip() else PRESETS.get((model_code, market))
+    if source == 'bmw' and not selected:
+        raise ValueError('No market-specific BMW PressClub page is registered for this combination. Select a verified custom URL or another source.')
+    if source == 'nhtsa':
+        selected = f'nhtsa:{nhtsa_model}:{model_year}'
     if len(selected) > 2_000:
         raise ValueError('URL is too long.')
-    key = hashlib.sha256(('v2\n' + model_code + '\n' + market + '\n' + selected).encode()).hexdigest()
+    key = hashlib.sha256(('v3\n' + model_code + '\n' + market + '\n' + source + '\n' + selected).encode()).hexdigest()
     cache_file = CACHE / f'{key}.json'
     if use_cache and cache_file.exists() and time.time() - cache_file.stat().st_mtime < 86_400:
         cached = json.loads(cache_file.read_text())
         if cached.get('model_code') == model_code and cached.get('market') == market:
             cached['cached'] = True
             return cached
-    final_url, html = _get(selected, session or requests.Session())
-    result = extract_page(html, final_url, model_code, market)
+    if source == 'nhtsa':
+        try:
+            year = int(model_year)
+        except (ValueError, TypeError) as exc:
+            raise ValueError('Choose a supported NHTSA model year.') from exc
+        result = _nhtsa(model_code, str(nhtsa_model or '').upper(), year, session=session)
+    else:
+        final_url, html = _get(selected, session or requests.Session())
+        result = extract_page(html, final_url, model_code, market)
     if use_cache:
         CACHE.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(json.dumps(result, ensure_ascii=False))

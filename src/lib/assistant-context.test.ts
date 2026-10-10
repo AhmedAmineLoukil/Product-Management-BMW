@@ -6,7 +6,7 @@ describe('assistant project grounding',()=>{
  it('uses only the selected market and exact source substrings',()=>{
   const state=createSeed(),project=state.projects[0];
   const context=buildAssistantContext(state,project,'What supports REQ-002?');
-  expect(context.project.market).toBe('Germany');
+   expect(context.project.market).toBe('United States');
   const answer=offlineAssistantAnswer(context);
   for(const citation of answer.citations)expect(context.sources.find(s=>s.id===citation.source_id)?.text).toContain(citation.quote);
  });
