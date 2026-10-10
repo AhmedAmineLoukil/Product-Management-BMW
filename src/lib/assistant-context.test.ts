@@ -7,8 +7,17 @@ describe('assistant project grounding',()=>{
   const state=createSeed(),project=state.projects[0];
   const context=buildAssistantContext(state,project,'What supports REQ-002?');
   expect(context.project.market).toBe('Germany');
+  expect(context.readiness.overall).toBeGreaterThan(60);
   const answer=offlineAssistantAnswer(context);
   for(const citation of answer.citations)expect(context.sources.find(s=>s.id===citation.source_id)?.text).toContain(citation.quote);
+ });
+ it('answers hackathon readiness questions with PM gates and actions',()=>{
+  const state=createSeed(),project=state.projects[0];
+  const context=buildAssistantContext(state,project,'How demo-ready are we for the judges?');
+  const answer=offlineAssistantAnswer(context);
+  expect(answer.answer).toContain('Demo readiness');
+  expect(answer.decision_gate).toContain('PM');
+  expect(answer.next_actions?.length).toBeGreaterThan(0);
  });
  it('does not borrow evidence from another project',()=>{
   const state=createSeed(),project=state.projects[1];

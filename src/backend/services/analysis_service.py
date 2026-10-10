@@ -10,9 +10,22 @@ from src.backend.schemas import Requirement
 from src.backend.services.requirement_service import add_ai_proposal
 
 
+def _bounded_int(name, default, minimum, maximum):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f'{name} must be an integer.') from exc
+    return min(maximum, max(minimum, value))
+
+
 def analyze_records(records, *, client=None):
-    if not isinstance(records, list) or not 1 <= len(records) <= 50:
-        raise ValueError('Select between 1 and 50 feedback records per live run.')
+    record_limit = _bounded_int('OPENAI_RUN_RECORD_LIMIT', 50, 1, 50)
+    char_limit = _bounded_int('OPENAI_MAX_INPUT_CHARS', 100_000, 1_000, 100_000)
+    if not isinstance(records, list) or not 1 <= len(records) <= record_limit:
+        raise ValueError(f'Select between 1 and {record_limit} feedback records per live run.')
     valid = [FeedbackRecord.model_validate(r) for r in records]
     if len({r.source_id for r in valid}) != len(valid):
         raise ValueError('Duplicate source IDs are not allowed.')
@@ -20,8 +33,8 @@ def analyze_records(records, *, client=None):
         raise ValueError('Analyze one vehicle and market at a time.')
     if any(not r.text.strip() for r in valid):
         raise ValueError('Feedback must not be empty.')
-    if sum(len(r.text) for r in valid) > 100_000:
-        raise ValueError('Feedback exceeds the 100,000-character limit.')
+    if sum(len(r.text) for r in valid) > char_limit:
+        raise ValueError(f'Feedback exceeds the {char_limit}-character live AI limit.')
     if client is None and not os.getenv('OPENAI_API_KEY'):
         raise ValueError('Set OPENAI_API_KEY in the server .env file and restart the app.')
     started = time.perf_counter()

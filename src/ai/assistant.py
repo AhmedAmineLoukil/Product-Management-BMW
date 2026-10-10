@@ -1,7 +1,7 @@
 """Read-only, source-grounded PM assistant. No mutation tools are exposed."""
 import json
 import os
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Citation(BaseModel):
@@ -15,6 +15,9 @@ class AssistantDraft(BaseModel):
     answer: str
     citations: list[Citation]
     uncertainty: str
+    next_actions: list[str] = Field(default_factory=list)
+    risk_flags: list[str] = Field(default_factory=list)
+    decision_gate: str = ''
 
 
 def answer_question(payload: dict, *, client=None) -> dict:
@@ -52,6 +55,8 @@ def answer_question(payload: dict, *, client=None) -> dict:
             'For any claim about customer evidence, cite a supplied source ID and quote an exact substring from that record. '
             'If evidence is absent, state that clearly. Distinguish synthetic demo records, external context, and BMW customer feedback. '
             'Explain unknown score dimensions without inventing ratings. The assistant cannot approve, reject, edit or challenge requirements. '
+            'For hackathon readiness questions, use the supplied readiness and audit_summary fields to explain strengths, gaps and PM gates. '
+            'Return concise next_actions and risk_flags when useful. Use decision_gate to name the mandatory human decision point. '
             'Keep the answer concise and explain uncertainty in plain language. Return citations as separate structured entries; no inline citations.'
         ),
         input=json.dumps(payload, ensure_ascii=False),
@@ -61,16 +66,20 @@ def answer_question(payload: dict, *, client=None) -> dict:
     if getattr(response, 'status', 'completed') != 'completed' or response.output_parsed is None:
         raise ValueError('The assistant returned an incomplete response.')
     draft = AssistantDraft.model_validate(response.output_parsed)
-    if len(draft.answer) > 3_000 or len(draft.citations) > 8:
+    if len(draft.answer) > 3_000 or len(draft.citations) > 8 or len(draft.next_actions) > 6 or len(draft.risk_flags) > 6:
         raise ValueError('The assistant response exceeded its limits.')
     for citation in draft.citations:
         if citation.source_id not in by_id or not citation.quote or citation.quote not in by_id[citation.source_id]:
             raise ValueError('The assistant produced an unsupported citation. Please retry.')
-    if sources and not draft.citations and not ('no evidence' in draft.answer.lower() or 'insufficient evidence' in draft.answer.lower()):
+    evidence_question = any(term in question.lower() for term in ('support', 'evidence', 'source', 'record', 'quote', 'finding'))
+    if evidence_question and sources and not draft.citations and not ('no evidence' in draft.answer.lower() or 'insufficient evidence' in draft.answer.lower()):
         raise ValueError('The assistant answer needs a source citation. Please retry.')
     usage = getattr(response, 'usage', None)
     return {'answer': draft.answer, 'citations': [c.model_dump() for c in draft.citations],
             'uncertainty': draft.uncertainty,
+            'next_actions': draft.next_actions[:6],
+            'risk_flags': draft.risk_flags[:6],
+            'decision_gate': draft.decision_gate,
             'metrics': {'input_tokens': getattr(usage, 'input_tokens', 0) or 0,
                         'output_tokens': getattr(usage, 'output_tokens', 0) or 0,
                         'model': os.getenv('OPENAI_CHAT_MODEL', 'gpt-5-mini')}}

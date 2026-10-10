@@ -1,10 +1,26 @@
 import {useEffect,useRef,useState} from 'react';
-import {ArrowUp,BookOpen,MessageCircle,ShieldCheck,Sparkles,X} from 'lucide-react';
+import {ArrowUp,BookOpen,MessageCircle,ShieldCheck,Sparkles,TriangleAlert,X} from 'lucide-react';
 import {useApp} from '../context';
 import {buildAssistantContext,lookupAssistantSource,offlineAssistantAnswer,type AssistantAnswer} from '../lib/assistant-context';
 
 type Message={role:'user'|'assistant';text:string;answer?:AssistantAnswer;mode?:'AI'|'Offline guide'};
-const suggestions=['What supports the top requirement?','Which scores still need PM judgment?','Show me an evidence gap'];
+const suggestions=[
+ 'How demo-ready are we for the judges?',
+ 'What supports the top requirement?',
+ 'Where is the weakest traceability link?',
+ 'Which scores still need PM judgment?'
+];
+
+function Guidance({answer}:{answer:AssistantAnswer}){
+ const hasActions=Boolean(answer.next_actions?.length);
+ const hasRisks=Boolean(answer.risk_flags?.length);
+ if(!hasActions&&!hasRisks&&!answer.decision_gate)return null;
+ return <div className="assistant-guidance">
+  {answer.decision_gate&&<p className="assistant-decision"><ShieldCheck size={13}/>{answer.decision_gate}</p>}
+  {hasRisks&&<div className="assistant-list assistant-risks"><span><TriangleAlert size={12}/>Risks</span>{answer.risk_flags!.slice(0,4).map(item=><p key={item}>{item}</p>)}</div>}
+  {hasActions&&<div className="assistant-list assistant-actions"><span><Sparkles size={12}/>Next actions</span>{answer.next_actions!.slice(0,4).map(item=><p key={item}>{item}</p>)}</div>}
+ </div>;
+}
 
 export default function Assistant(){
  const {state,project,aiAvailable,cloud,openSource}=useApp();
@@ -32,14 +48,14 @@ export default function Assistant(){
  };
  return <div className="assistant-root">
   {open&&<section className="assistant-panel" aria-label="InsightPilot assistant">
-   <header className="assistant-header"><div className="assistant-avatar"><Sparkles size={18}/></div><div><strong>InsightPilot Assistant</strong><span>{liveAssistant?'Live AI · grounded in this project':'Offline evidence guide'} · {project.derivative} / {project.market}</span></div><button aria-label="Close assistant" onClick={()=>setOpen(false)}><X size={18}/></button></header>
+   <header className="assistant-header"><div className="assistant-avatar"><Sparkles size={18}/></div><div><strong>InsightPilot Assistant</strong><span>{liveAssistant?'Live AI - grounded in this project':'Offline evidence guide'} - {project.derivative} / {project.market}</span></div><button aria-label="Close assistant" onClick={()=>setOpen(false)}><X size={18}/></button></header>
    <div className="assistant-messages" role="log" aria-live="polite">
-    {!messages.length&&<div className="assistant-welcome"><div className="assistant-welcome-icon"><BookOpen size={24}/></div><h3>Ask about the evidence</h3><p>I can explain requirements, show supporting records and point out missing PM assessments. Decisions remain yours.</p><div className="assistant-suggestions">{suggestions.map(s=><button key={s} onClick={()=>void send(s)}>{s}</button>)}</div></div>}
-    {messages.map((m,i)=><div key={i} className={`assistant-message ${m.role}`}><div className="assistant-bubble">{m.role==='assistant'&&<small>{m.mode}</small>}<p>{m.text}</p>{m.answer?.uncertainty&&<p className="assistant-uncertainty"><ShieldCheck size={13}/>{m.answer.uncertainty}</p>}{m.answer?.citations.length? <div className="assistant-citations"><span>Source records</span>{m.answer.citations.map((c,j)=>{const source=lookupAssistantSource(state,project.id,c.source_id);return <button key={`${c.source_id}-${j}`} onClick={()=>source&&openSource(source)} disabled={!source}><strong>{c.source_id}</strong><span>“{c.quote.slice(0,100)}”</span></button>;})}</div>:null}</div></div>)}
-    {busy&&<div className="assistant-message assistant"><div className="assistant-bubble assistant-thinking">Checking the selected evidence…</div></div>}<div ref={bottom}/>
+    {!messages.length&&<div className="assistant-welcome"><div className="assistant-welcome-icon"><BookOpen size={24}/></div><h3>Ask about evidence, gaps or demo readiness</h3><p>I can explain requirements, show supporting records and point out mandatory PM review gates. Decisions remain yours.</p><div className="assistant-suggestions">{suggestions.map(s=><button key={s} onClick={()=>void send(s)}>{s}</button>)}</div></div>}
+    {messages.map((m,i)=><div key={i} className={`assistant-message ${m.role}`}><div className="assistant-bubble">{m.role==='assistant'&&<small>{m.mode}</small>}<p>{m.text}</p>{m.answer&&<Guidance answer={m.answer}/>} {m.answer?.uncertainty&&<p className="assistant-uncertainty"><ShieldCheck size={13}/>{m.answer.uncertainty}</p>}{m.answer?.citations.length? <div className="assistant-citations"><span>Source records</span>{m.answer.citations.map((c,j)=>{const source=lookupAssistantSource(state,project.id,c.source_id);return <button key={`${c.source_id}-${j}`} onClick={()=>source&&openSource(source)} disabled={!source}><strong>{c.source_id}</strong><span>"{c.quote.slice(0,100)}"</span></button>;})}</div>:null}</div></div>)}
+    {busy&&<div className="assistant-message assistant"><div className="assistant-bubble assistant-thinking">Checking the selected evidence...</div></div>}<div ref={bottom}/>
    </div>
-   <form className="assistant-composer" onSubmit={e=>{e.preventDefault();void send(question);}}><label className="sr-only" htmlFor="assistant-question">Ask the assistant</label><input id="assistant-question" value={question} onChange={e=>setQuestion(e.target.value)} maxLength={600} placeholder="Ask about a requirement or source…" disabled={busy}/><button type="submit" aria-label="Send question" disabled={!question.trim()||busy}><ArrowUp size={18}/></button></form>
-   <div className="assistant-footnote">Answers use this project’s records. Verify conclusions before approving.</div>
+   <form className="assistant-composer" onSubmit={e=>{e.preventDefault();void send(question);}}><label className="sr-only" htmlFor="assistant-question">Ask the assistant</label><input id="assistant-question" value={question} onChange={e=>setQuestion(e.target.value)} maxLength={600} placeholder="Ask about a requirement, source or judge criterion..." disabled={busy}/><button type="submit" aria-label="Send question" disabled={!question.trim()||busy}><ArrowUp size={18}/></button></form>
+   <div className="assistant-footnote">Answers use this project's records. Verify conclusions before approving.</div>
   </section>}
   <button className="assistant-launcher" onClick={()=>setOpen(value=>!value)} aria-label={open?'Close assistant':'Open assistant'}><MessageCircle size={21}/><span>Ask InsightPilot</span></button>
  </div>;

@@ -54,13 +54,15 @@ class ExternalSourceTests(unittest.TestCase):
 class AssistantTests(unittest.TestCase):
     def payload(self):return {'question':'What supports this requirement?','project':{'id':'p1','derivative':'G60','market':'Germany'},'requirements':[],'findings':[],'sources':[{'id':'S1','text':'The seats are supportive on long trips.'}]}
     def response(self,quote):
-        parsed=AssistantDraft(answer='One record discusses seat support.',citations=[Citation(source_id='S1',quote=quote)],uncertainty='Only one record.')
+        parsed=AssistantDraft(answer='One record discusses seat support.',citations=[Citation(source_id='S1',quote=quote)],uncertainty='Only one record.',next_actions=['Review source record.'],risk_flags=['Single record only.'],decision_gate='PM review required.')
         return SimpleNamespace(status='completed',output_parsed=parsed,usage=SimpleNamespace(input_tokens=100,output_tokens=40))
     def test_citation_is_exact_and_no_write_tools(self):
         client=Mock();client.responses.parse.return_value=self.response('seats are supportive')
         result=answer_question(self.payload(),client=client)
         self.assertEqual(result['citations'][0]['source_id'],'S1')
         self.assertEqual(result['metrics']['input_tokens'],100)
+        self.assertEqual(result['decision_gate'],'PM review required.')
+        self.assertEqual(result['next_actions'],['Review source record.'])
         self.assertFalse(client.responses.parse.call_args.kwargs['store'])
     def test_invented_quote_rejected(self):
         client=Mock();client.responses.parse.return_value=self.response('invented claim')
