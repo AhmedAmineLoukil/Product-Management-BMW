@@ -7,7 +7,7 @@ from src.ai.assistant import answer_question
 
 if __name__ == '__main__':
     try:
-        print(json.dumps(answer_question(json.load(sys.stdin)), ensure_ascii=False))
+        print(json.dumps(answer_question(json.load(sys.stdin))))
     except ValueError as exc:
         print(json.dumps({'error': str(exc)}))
         sys.exit(1)

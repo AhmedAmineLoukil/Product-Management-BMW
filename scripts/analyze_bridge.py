@@ -8,7 +8,7 @@ from src.backend.services.analysis_service import analyze_records
 if __name__ == '__main__':
     try:
         records = json.load(sys.stdin)
-        print(json.dumps(analyze_records(records), ensure_ascii=False))
+        print(json.dumps(analyze_records(records)))
     except ValueError as exc:
         print(json.dumps({'error': str(exc)}))
         sys.exit(1)

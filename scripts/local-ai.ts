@@ -40,7 +40,7 @@ export function localAI(env:Record<string,string>):Plugin {
     ||(existsSync('.venv/Scripts/python.exe')?'.venv/Scripts/python.exe'
     :existsSync('.venv/bin/python')?'.venv/bin/python'
     :process.platform==='win32'?'python':'python3');
-   const child=spawn(python,[route.script],{env:{...process.env,...env},stdio:['pipe','pipe','pipe']});
+   const child=spawn(python,[route.script],{env:{...process.env,...env,PYTHONIOENCODING:'utf-8'},stdio:['pipe','pipe','pipe']});
    let output='',finished=false;
    const finish=(status:number,result:unknown)=>{if(finished)return;finished=true;clearTimeout(timer);if(req.url==='/api/analyze')activeAnalysis=false;reply(status,result);};
    const timer=setTimeout(()=>{child.kill();finish(504,{error:'Operation timed out. Try a smaller input or another source.'});},route.timeout);
