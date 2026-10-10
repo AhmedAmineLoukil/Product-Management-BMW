@@ -1,8 +1,9 @@
 # Combined AI feedback pipeline
 
-This package combines the two team branches' work: structured finding extraction
-and strict evidence checks, plus AI semantic clustering and requirement drafts.
-It is a backend module; it is not connected to the static web demo yet.
+This package combines source-grounded extraction, scope-isolated semantic grouping,
+and customer-facing requirement drafts. `scripts/analyze_bridge.py` connects it to
+the React app through the local Vite server. `src/backend/services/analysis_service.py`
+validates the input and records API usage.
 
 ## Run it
 
@@ -47,8 +48,9 @@ review.
   challenge data with the configured API.
 - The API receives supplied feedback text. `store=False` is set on Responses API
   calls; this is not a substitute for confirming data-use requirements.
-- This module does not read spreadsheets, persist results, calculate a product
-  priority score, or integrate with the browser prototype.
+- The module itself does not read spreadsheets or save browser state. The React
+  import and integration layers handle those tasks and leave unknown PM score
+  dimensions unset.
 - Semantic grouping and requirement wording are model suggestions, not verified
   facts. Quotes are checked exactly; their interpretation still needs a person.
 - Do not put API keys or raw customer data in Git. Keep credentials in the

@@ -31,6 +31,25 @@ def cluster_findings(client, findings):
 
     clusters = []
     for scoped_findings in groups.values():
+        # A single finding needs no model call. This also avoids spending tokens
+        # on the most common small-batch case while retaining exact provenance.
+        if len(scoped_findings) == 1:
+            finding = scoped_findings[0]
+            source = finding["source_reference"]
+            clusters.append({
+                "cluster_id": f"C{len(clusters) + 1:04d}",
+                "title": finding["summary"][:100],
+                "summary": finding["summary"],
+                "category": finding["category"],
+                "finding_type": finding["finding_type"],
+                "finding_ids": [finding["finding_id"]],
+                "source_ids": [finding["source_id"]],
+                "supporting_record_count": 1,
+                "uncertainty": "Single source finding; no semantic grouping was needed.",
+                "vehicle": source["vehicle"],
+                "market": source.get("market"),
+            })
+            continue
         by_id = {finding["finding_id"]: finding for finding in scoped_findings}
         payload = [{
             "finding_id": finding["finding_id"],

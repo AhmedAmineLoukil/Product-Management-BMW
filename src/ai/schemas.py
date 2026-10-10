@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, field_validator
 Category = Literal[
     "Comfort", "Charging", "UX", "Interior", "Digital Services",
     "Storage", "Technology", "Safety", "Performance", "Other",
+    "Space & Practicality", "Usability", "Infotainment & Digital Services",
+    "Design & Perceived Quality", "Driving Experience", "Range & Charging", "Equipment & Packages",
 ]
 FindingType = Literal["complaint", "unmet_need", "positive_feedback", "unclear"]
 
@@ -24,6 +26,7 @@ class FeedbackRecord(StrictModel):
     source_type: str | None = None
     source_file: str | None = None
     source_location: str | None = None
+    metadata: dict | None = None
 
     @field_validator("source_id", "vehicle")
     @classmethod

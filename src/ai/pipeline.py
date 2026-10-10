@@ -1,6 +1,7 @@
 """End-to-end synchronous pipeline with injectable client for local demos."""
 
 from pydantic import ValidationError
+from concurrent.futures import ThreadPoolExecutor
 
 from .clustering import cluster_findings, singleton_fallback
 from .evidence import validate_finding, validate_requirement
@@ -9,7 +10,7 @@ from .requirements import generate_requirements
 from .schemas import FeedbackRecord
 
 
-def run_ai_pipeline(records, *, client=None):
+def run_ai_pipeline(records, *, client=None, workers=1):
     """Return findings, semantic clusters, draft requirements, and validation errors.
 
     Pass an OpenAI-compatible client to avoid constructing one here. Without
@@ -48,18 +49,29 @@ def run_ai_pipeline(records, *, client=None):
         nonlocal client
         if client is None:
             from openai import OpenAI
-            client = OpenAI()
+            client = OpenAI(timeout=60, max_retries=1)
         return client
 
-    for record in valid_records.values():
+    def extract_one(record):
         if not record.text.strip():
-            add_error("empty_feedback", source_id=record.source_id)
-            continue
+            return (record, None, "empty_feedback")
         try:
             extracted = extract_findings(get_client(), record)
         except Exception:
-            # Keep raw exception text out of results; it may contain user data.
-            add_error("extraction_failed", source_id=record.source_id)
+            return (record, None, "extraction_failed")
+        return (record, extracted, None)
+
+    ordered = list(valid_records.values())
+    if workers > 1 and ordered:
+        get_client()  # Construct the shared client before starting threads.
+        with ThreadPoolExecutor(max_workers=min(workers, 4)) as pool:
+            extracted_rows = list(pool.map(extract_one, ordered))
+    else:
+        extracted_rows = [extract_one(record) for record in ordered]
+
+    for record, extracted, issue in extracted_rows:
+        if issue:
+            add_error(issue, source_id=record.source_id)
             continue
         if not extracted:
             add_error("no_findings", source_id=record.source_id)
@@ -78,6 +90,8 @@ def run_ai_pipeline(records, *, client=None):
                           source_id=record.source_id)
             result["findings"].append(finding)
 
+    if not any(f["evidence_valid"] and f["finding_type"] != "unclear" for f in result["findings"]):
+        return result
     try:
         result["clusters"] = cluster_findings(get_client(), result["findings"])
     except Exception:
@@ -94,7 +108,7 @@ def run_ai_pipeline(records, *, client=None):
 
     findings_by_id = {finding["finding_id"]: finding for finding in result["findings"]}
     for index, draft in enumerate(drafts, start=1):
-        requirement = draft.model_dump()
+        requirement = dict(draft)
         requirement["requirement_id"] = f"R{index:04d}"
         errors = validate_requirement(
             requirement, findings_by_id, valid_records, result["clusters"]

@@ -27,6 +27,7 @@ def generate_requirements(client, findings, clusters):
             "approve the proposal. Evidence IDs are attached by the application.",
             evidence_payload,
         )
+        draft.uncertainties = list(dict.fromkeys(draft.uncertainties + ([cluster["uncertainty"]] if cluster.get("uncertainty") else [])))
         # IDs come from validated Python data, never from model-generated text.
         requirements.append({
             **draft.model_dump(),

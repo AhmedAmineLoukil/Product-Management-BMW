@@ -1,6 +1,7 @@
 """Structured model calls for finding extraction."""
 
 import json
+import os
 
 from .schemas import ExtractionBatch
 
@@ -11,7 +12,7 @@ MODEL = "gpt-5-mini"
 def parse_model(client, schema, instructions: str, payload):
     """Call the Responses API and validate its structured result again locally."""
     response = client.responses.parse(
-        model=MODEL,
+        model=os.getenv("OPENAI_MODEL", MODEL),
         text_format=schema,
         instructions=instructions,
         input=json.dumps(payload, ensure_ascii=False),

@@ -1,0 +1,23 @@
+
+# Data ingestion (Excel)
+pandas>=2.2,<3
+openpyxl>=3.1,<4
+
+# PDF extraction
+pymupdf>=1.24,<2
+
+# OpenAI AI pipeline
+openai>=1.80,<3
+pydantic>=2.8,<3
+python-dotenv>=1,<2
+
+# Frontend dashboard
+streamlit>=1.42,<2
+
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+httpx>=0.27,<1
+
+# Public research page parsing
+requests>=2.31,<3
+beautifulsoup4>=4.12,<5
