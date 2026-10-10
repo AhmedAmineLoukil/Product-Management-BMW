@@ -16,4 +16,15 @@ describe('assistant project grounding',()=>{
   expect(context.sources).toHaveLength(0);
   expect(offlineAssistantAnswer(context).answer).toContain('no requirements');
  });
+ it('answers a product-context question from labeled reference records',()=>{
+  const state=createSeed(),project=state.projects[0];
+  const context=buildAssistantContext(state,project,'What equipment data is available?');
+  const answer=offlineAssistantAnswer(context);
+  expect(answer.citations.length).toBeGreaterThan(0);
+  for(const citation of answer.citations){
+   const source=context.sources.find(s=>s.id===citation.source_id);
+   expect(source?.source_type).not.toBe('Customer verbatims');
+   expect(source?.text).toContain(citation.quote);
+  }
+ });
 });

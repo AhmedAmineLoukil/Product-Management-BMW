@@ -17,6 +17,7 @@ export function localAI(env:Record<string,string>):Plugin {
    '/api/analyze':{script:'scripts/analyze_bridge.py',timeout:600_000,needsKey:true},
    '/api/chat':{script:'scripts/chat_bridge.py',timeout:60_000,needsKey:true},
    '/api/collect':{script:'scripts/collect_bridge.py',timeout:45_000,needsKey:false},
+   '/api/bmw':{script:'scripts/bmw_bridge.py',timeout:60_000,needsKey:false},
   };
   const route=routes[req.url??''];
   if(!route||req.method!=='POST')return reply(404,{error:'Unknown endpoint.'});

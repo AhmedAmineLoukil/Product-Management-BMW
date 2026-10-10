@@ -13,15 +13,17 @@ cd /Users/saif/Documents/ChatGPT/Hackathon/TUM-TUM-AI
 
 The first start may install Node and Python packages. Open **http://127.0.0.1:5173/**. Keep Terminal open while using the app. Press **Control+C** in Terminal to stop it. Use this address, not the old `file:///.../index.html` page. On another computer, install Node.js 20+ and Python 3.10+ first, then run `./start-local.sh` from the cloned repository.
 
-No credentials are needed for the offline demonstration. It starts with a clearly labeled synthetic BMW iX1/Germany project. Your own vehicle/market projects start empty. Local changes are saved in this browser's local storage; they are not shared with teammates or secured by login.
+No credentials are needed for the offline demonstration. It starts with a clearly labeled synthetic BMW iX1/Germany project. Local changes are saved in this browser's IndexedDB, with a small-demo local-storage copy for older browsers. They are not shared with teammates or secured by login.
+
+For the supplied BMW sources, place these files in the ignored `data/raw/` folder on your own computer: `F70_feedback_hackathon.xlsx`, `F70_G60_G68_G70_customer_studies.xlsx`, `sales_volumes.xlsx`, `F70_OptionList.PDF`, and `f70_equipment_curated.csv`. The library shows which are available and reads them without writing a processed data file. A teammate without these private files can still use the synthetic demo. Do not add the private files or an exported workspace to Git.
 
 ## Follow the workflow
 
-1. In **Settings**, create a project for one vehicle and market, for example **BMW 5 Series G60 / Germany**. The selector at the top changes which datasets, findings, requirements, history, and assistant context you see.
-2. In **Data Sources → Internal data**, upload a CSV or XLSX feedback file. Choose **Customer verbatims**, map the text column and optional source ID, validate, and import. The source row, sheet, original fields, and ID remain available. Studies, sales figures, and equipment can be imported as reference context, but are not counted as customer complaints.
-3. Select the validated feedback dataset. **Run demo analysis** uses a fast keyword rule and produces tentative proposals. With a configured key, **Run live AI analysis** extracts exact quotes, groups related signals within the same vehicle and market, and drafts customer-facing requirements. The local live limit is 50 feedback records per run.
+1. Open **Data Sources → Internal data**. In **BMW data library**, choose a vehicle and one of the markets actually present in the supplied files, then click **Load this vehicle + market**. The app creates or selects that exact project. For example, F70/United Kingdom has customer feedback; G68/China has study and shared-series sales context, but no supplied customer verbatims. The selector at the top changes which datasets, findings, requirements, history, and assistant context you see.
+2. Inspect the imported source cards. Repeated F70 annotation rows become one comment with every original annotation retained. Study means, US study response fractions, 2024/2025 sales, future-looking 2030 sales, and catalog pages have their original measure and source location. G60/G68 sales remain explicitly combined; the German F70 equipment catalog is not shown as UK equipment. You can also upload your own CSV or XLSX, map columns, validate, and import it.
+3. Select the validated **Customer verbatims** dataset. **Run demo analysis** scans all selected comments with fast, transparent keyword rules and produces tentative proposals. With a configured key, **Run live AI analysis** extracts exact quotes, groups related signals within the same vehicle and market, and drafts customer-facing requirements. Local live AI uses explicit batches of up to 50 records and logs each batch's coverage; you can run further batches separately. Reference sources remain available to the PM and assistant, and never masquerade as customer complaints.
 4. Open **Evidence Explorer** and a finding. Click its source IDs to see the original text and any contradiction or uncertainty. Findings can be challenged by a person.
-5. Open **Requirements** or **Review Queue**. Inspect evidence, edit the wording, set or leave priority dimensions unknown, and approve, reject, or request evidence with a written reason. AI cannot make a PM decision.
+5. In **Settings**, enter your name as the responsible PM before making a decision on supplied data. Open **Requirements** or **Review Queue**. Inspect evidence and the separate product/market context, edit the wording, set or leave priority dimensions unknown, and approve, reject, or request evidence with a written reason. AI cannot make a PM decision.
 6. Open **Prioritization** for the score breakdown. The number of selected records is a sample count, not a population frequency. Unknown impact, strategy, and feasibility stay unknown until assessed.
 7. Open **Audit Trail** and **Data Sources → Analysis history** to see decisions, previous versions, linked records, run time, model calls, and token usage. Click **Ask InsightPilot** for source-linked answers about the selected project.
 8. In **External research**, choose F70, G60, G68, or G70. Fetch a BMW PressClub preset or enter a public HTTPS review/article URL, inspect the preview, and explicitly import. These records stay labeled as external context and do not enter feedback analysis.
@@ -42,7 +44,8 @@ Only start a live analysis when the supplied feedback is permitted to be sent to
 
 | Capability | Current behavior |
 | --- | --- |
-| React workspace, file import, project selector, source links, review/edit/challenge/approval, scoring, local audit/export | Working locally; browser local storage is the persistence layer. |
+| React workspace, file import, project selector, source links, review/edit/challenge/approval, scoring, local audit/export | Working locally; browser IndexedDB stores larger workspaces. |
+| Supplied BMW data library | Reads all available supplied source roles in their actual vehicle/market scopes. It keeps original fields and provenance, deduplicates repeated F70 annotations, and clearly labels shared or future-looking measures. Requires the private files on the local computer. |
 | Offline analysis | A transparent keyword demonstration, not an LLM or a verified reading of customer sentiment. |
 | Python live analysis and AI assistant | Implemented server side with evidence checks; needs `OPENAI_API_KEY`. Live provider behavior and cost were not verified without credentials. |
 | Public source collector | Fetches allowed HTML/JSON-LD pages after a robots check, throttles requests, caches for 24 hours, deduplicates by vehicle/market/page/text, and retains URL and dates. A blocked/unreadable page gives an error. Market applicability is a PM judgment, not inferred from the chosen market label. |
@@ -83,7 +86,7 @@ npm run test:db
 npm run test:e2e
 ```
 
-The browser checks use synthetic data. They cover upload, analysis, record links, requirement review, audit, project isolation, mobile layout, assistant citations, and external collector preview/import. `scripts/e2e.mjs` writes screenshots only to ignored `artifacts/`. Seven Python tests for private workbooks skip when those inputs are absent; this does not mean the private files were committed. Local PostgreSQL checks use PGlite, not a hosted Supabase database.
+The regular browser checks use synthetic data. They cover upload, analysis, record links, requirement review, audit, project isolation, mobile layout, assistant citations, and external collector preview/import. When private files are present locally, `node scripts/bmw-browser-check.mjs` also checks a real F70/UK import, browser persistence, the full offline analysis, G68/China reference-only scope, and mobile source selection. Screenshots go only to ignored `artifacts/`. Python tests for private workbook outputs skip when processed outputs are absent; this does not mean the private files were committed. Local PostgreSQL checks use PGlite, not a hosted Supabase database.
 
 ## Optional shared deployment
 

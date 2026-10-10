@@ -28,7 +28,7 @@ export function buildAssistantContext(state:Workspace,project:Project,question:s
  const sourceIds=new Set(findings.flatMap(f=>[...f.sources,...f.contradictions]));
  const datasets=state.datasets.filter(d=>d.projectId===project.id);
  const records=datasets.flatMap(d=>d.records.map(r=>({r,d})));
- const chosen=records.map(x=>({...x,score:relevant(question,`${x.r.id} ${x.r.content}`)+(sourceIds.has(x.r.id)?5:0)})).sort((a,b)=>b.score-a.score).filter(x=>x.score>0).slice(0,8);
+ const chosen=records.map(x=>({...x,score:relevant(question,`${x.r.id} ${x.r.content} ${x.d.type} ${x.d.name} ${x.r.category??''}`)+(sourceIds.has(x.r.id)?5:0)})).sort((a,b)=>b.score-a.score).filter(x=>x.score>0).slice(0,8);
  return {
   question:question.trim(),project:{id:project.id,derivative:project.derivative,market:project.market,horizon:project.horizon},
   requirements:selectedReqs.map(r=>({id:r.id,title:r.title,statement:r.statement,status:r.status,category:r.category,
@@ -42,6 +42,11 @@ export function buildAssistantContext(state:Workspace,project:Project,question:s
 
 export function offlineAssistantAnswer(context:AssistantContext):AssistantAnswer {
  const r=context.requirements[0];
+ const referenceQuestion=/\b(sales|study|equipment|catalog|external|market data)\b/i.test(context.question);
+ if(referenceQuestion){
+  const references=context.sources.filter(s=>s.source_type!=='Customer verbatims').slice(0,3);
+  if(references.length)return {answer:`I found ${references.length} source record(s) for ${context.project.derivative} in ${context.project.market}. Open the citations to inspect the exact measures and caveats before using them in a PM decision.`,citations:references.map(s=>({source_id:s.id,quote:s.text.slice(0,180)})),uncertainty:'Study scales, shared model sales, publication dates, and market applicability must be checked in the original records.'};
+ }
  if(!r)return {answer:`There are no requirements for ${context.project.derivative} in ${context.project.market} yet. Import feedback and run an analysis first.`,citations:[],uncertainty:'No project evidence is available.'};
  const status=r.score===null?'Its priority is unscored because some PM ratings are still unknown.':`Its current score is ${r.score} (${r.priority}).`;
  const linked=new Set(context.findings.filter(f=>r.finding_ids.includes(f.id)).flatMap(f=>[...f.source_ids,...f.contradictions]));
