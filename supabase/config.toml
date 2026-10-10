@@ -1,0 +1,5 @@
+project_id = "bmw-insightpilot"
+[functions.workspace]
+verify_jwt = true
+[functions.analyze]
+verify_jwt = true

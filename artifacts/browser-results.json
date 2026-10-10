@@ -1,0 +1,22 @@
+{
+  "passed": 16,
+  "tests": [
+    "Populated overview with derived KPIs",
+    "Search, requirement edit and preserved version",
+    "Approval requires rationale and creates a new version",
+    "Reload persistence",
+    "Original source tracing, challenge propagation and immutable prior audit",
+    "Audit search, table and before/after inspection",
+    "Unknown feasibility remains unscored",
+    "Real CSV upload, mapping, validation and preview",
+    "Selected-dataset analysis produces reviewable proposals",
+    "Supplied XLSX worksheet parsing and mapping",
+    "Grouped study normalization preserves measures and creates an isolated source project",
+    "Review queue and explicit research availability",
+    "Configurable scoring model persists a new version",
+    "Project and market isolation",
+    "Mobile navigation and no viewport overflow",
+    "No browser runtime errors"
+  ],
+  "errors": []
+}

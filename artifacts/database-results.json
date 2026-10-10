@@ -1,0 +1,15 @@
+{
+  "passed": 10,
+  "tests": [
+    "Migrations execute on PostgreSQL",
+    "Seed snapshot synchronizes normalized records and source links",
+    "Stale revisions cannot overwrite another decision",
+    "Snapshot cannot rewrite protected audit history",
+    "Immutable audit and version triggers reject update and delete",
+    "Non-members cannot read another workspace",
+    "Raw AI job inputs and intermediates are not browser-readable",
+    "Authenticated browser users cannot mutate rows or invoke commit RPC",
+    "Workspace members have scoped reads and no direct audit writes",
+    "Append-only transaction commits atomically at the next revision"
+  ]
+}
