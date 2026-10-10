@@ -11,3 +11,8 @@ outputs/
 exports/
 *.sqlite3-wal
 *.sqlite3-shm
+node_modules/
+dist/
+artifacts/
+.npm-cache/
+*.tsbuildinfo

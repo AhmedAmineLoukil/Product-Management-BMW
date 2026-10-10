@@ -1,45 +1,51 @@
-# Premium requirements workspace
+# BMW InsightPilot frontend
 
-Run both commands from the repository root. The new React presentation reuses the existing Python services; Streamlit remains available as a fallback.
+The React product workspace now runs from the repository root. It uses Vite for
+the browser app and a local-only Vite middleware for `/api/analyze`, `/api/chat`,
+and `/api/collect`; credentials stay in the Python process and are never sent to
+browser JavaScript.
+
+## Run locally
+
+From the repository root:
 
 ```powershell
-python -m pip install -r requirements-api.txt
-python -m uvicorn src.api:app --host 127.0.0.1 --port 8000
-```
-
-In another terminal:
-
-```powershell
-cd frontend
+.venv/Scripts/python.exe -m pip install -r requirements.txt
 npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. Vite proxies `/api` to the local backend. Both processes bind to localhost. `npm run build` verifies TypeScript and produces the frontend bundle. `npm run preview` also proxies to the backend; production hosting requires a same-origin `/api` reverse proxy.
+Open `http://127.0.0.1:5173/`. If that port is already in use, Vite prints the
+alternate localhost URL.
 
-The API defaults to the same database as the current Streamlit workspace: `data/local/copilot.sqlite3`. Set `BMW_DB_PATH` before starting it to select a different SQLite database. Set `BMW_DATA_PATH` for normalized local sources (default `data/processed`). No dataset is imported into the frontend build.
+The offline workspace works without credentials. Live AI analysis and chat need
+`OPENAI_API_KEY` in `.env` or the shell environment before starting Vite. Public
+source collection works without an OpenAI key.
 
-Implemented pages: Overview, Data Sources, AI Findings, Requirements, PM Decisions and Audit History. The header controls vehicle, market, persisted analysis and PM attribution. Requirements support search, category/status/priority/confidence filters and sort by date, score or sources. Detail tabs show original evidence, reference records, conflicting evidence, market limitations, assumptions, documented scoring and the append-only audit trail.
-
-The Synthetic demo action invokes the existing deterministic offline fixture and clearly labels fictional results. It sends no customer records externally. Real persisted runs are loaded from the existing database. Live analysis remains in the existing Python/Streamlit workflow; this API intentionally provides no external-data-transfer endpoint.
-
-PMs can assess priorities and approve, reject, postpone, edit or challenge proposals. Each action requires identity, rationale and the opened version. Missing scoring and unsupported approvals are rejected by the existing service. Challenge records a question for later AI review. Demo identities are attributed, not authenticated; keep this local interface on localhost.
-
-Verification:
+## Verify
 
 ```powershell
-python -m unittest discover -s tests
-cd frontend
+.venv/Scripts/python.exe -m unittest discover -s tests -v
 npm run build
 npm test
+npm run check:edge
+npm run test:db
 ```
 
-Streamlit fallback:
+For browser coverage, start Vite first and then run:
 
 ```powershell
-python -m streamlit run app/dashboard.py
+$env:BASE_URL = 'http://127.0.0.1:5173'
+npm run test:e2e
 ```
 
-Validation completed: 63 Python tests, including isolated REST decision persistence and audit integration; frontend interaction tests cover navigation, search, original quotations, scoring inspection, confirmed decision payloads and failure states. Local API, Vite and proxy HTTP checks were performed. The default F70/GB database contained no persisted runs; use Synthetic demo for an explicitly fictional walkthrough or select your existing database via `BMW_DB_PATH`.
+Use the URL Vite printed if it selected a different port.
 
-Visual QA remains outstanding: the browser integration reported no available browser, so no screenshots, 1440px/laptop rendering inspection or real browser console verification could be performed in this session.
+## Legacy tools
+
+The Streamlit dashboard and existing FastAPI module remain available:
+
+```powershell
+.venv/Scripts/python.exe -m streamlit run app/dashboard.py
+.venv/Scripts/python.exe -m uvicorn src.api:app --host 127.0.0.1 --port 8000
+```

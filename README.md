@@ -1,8 +1,18 @@
 # BMW Product Requirements Copilot
 
-The integrated local PM application is now available. See [DEMO.md](DEMO.md) for
-the complete workflow and [PRIVACY_REVIEW.md](PRIVACY_REVIEW.md) for tracked-data
-cleanup and remaining historical exposure. Start with:
+The integrated React PM workspace is now available from the repository root. See
+[FRONTEND.md](FRONTEND.md) for the current local workflow, [DEMO.md](DEMO.md) for
+the legacy dashboard workflow and [PRIVACY_REVIEW.md](PRIVACY_REVIEW.md) for
+tracked-data cleanup and remaining historical exposure. Start with:
+
+```powershell
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+npm install
+npm run dev
+```
+
+Open the localhost URL printed by Vite. The Streamlit dashboard remains available
+as a fallback:
 
 ```powershell
 .venv/Scripts/python.exe -m streamlit run app/dashboard.py --server.address 127.0.0.1

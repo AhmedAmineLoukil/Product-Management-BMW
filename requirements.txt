@@ -14,3 +14,10 @@ python-dotenv>=1,<2
 
 # Frontend dashboard
 streamlit>=1.42,<2
+
+# Local API and public research collector
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+httpx>=0.27,<1
+requests>=2.31,<3
+beautifulsoup4>=4.12,<5

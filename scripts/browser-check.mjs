@@ -1,0 +1,13 @@
+import {chromium} from '@playwright/test';
+import {mkdir} from 'node:fs/promises';
+await mkdir('artifacts',{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1100},deviceScaleFactor:1});
+const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message)});page.on('console',m=>{if(m.type()==='error')console.log('CONSOLE',m.text())});page.on('requestfailed',r=>console.log('FAILED',r.url(),r.failure()));
+await page.goto('http://localhost:5173',{waitUntil:'networkidle'});
+await page.screenshot({path:'artifacts/overview-desktop.png',fullPage:true});
+console.log(JSON.stringify({title:await page.title(),body:(await page.locator('body').innerText()).slice(0,3000),errors}));
+await page.setViewportSize({width:390,height:844});
+await page.screenshot({path:'artifacts/overview-mobile.png',fullPage:true});
+console.log('Mobile overflow:',await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth));
+await browser.close();
