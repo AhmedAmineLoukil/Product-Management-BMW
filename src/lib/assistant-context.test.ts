@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {createSeed} from '../data/seed';
-import {buildAssistantContext,offlineAssistantAnswer} from './assistant-context';
+import {buildAssistantContext,lookupAssistantSource,offlineAssistantAnswer} from './assistant-context';
 
 describe('assistant project grounding',()=>{
  it('uses only the selected market and exact source substrings',()=>{
@@ -35,5 +35,13 @@ describe('assistant project grounding',()=>{
   expect(answer.citations.length).toBeGreaterThan(0);
   expect(answer.answer).toContain('no drafted requirements');
   expect(answer.citations.every(c=>context.sources.some(s=>s.id===c.source_id&&s.text.includes(c.quote)))).toBe(true);
+ });
+ it('never sends previously imported external research to the assistant',()=>{
+  const state=createSeed(),project=state.projects[0];
+  const source=state.datasets[0];
+  state.datasets.push({...source,id:'old-web',name:'Old public research',type:'External research',records:[{...source.records[0],id:'WEB-1',datasetId:'old-web',content:'External-only claim.'}]});
+  const context=buildAssistantContext(state,project,'What does WEB-1 say?');
+  expect(context.sources.some(s=>s.id==='WEB-1')).toBe(false);
+  expect(lookupAssistantSource(state,project.id,'WEB-1')).toBeUndefined();
  });
 });

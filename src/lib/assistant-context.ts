@@ -1,5 +1,6 @@
 import type {Workspace,Project,SourceRecord} from '../types';
 import {priorityFor,scoreRequirement} from './scoring';
+import {isInternalDataset} from './internal-data';
 
 export interface AssistantCitation {source_id:string;quote:string}
 export interface AssistantAnswer {answer:string;citations:AssistantCitation[];uncertainty:string;metrics?:{input_tokens:number;output_tokens:number;model:string}}
@@ -26,7 +27,7 @@ export function buildAssistantContext(state:Workspace,project:Project,question:s
  const linkedIds=new Set(selectedReqs.flatMap(r=>r.findings));
  const findings=state.findings.filter(f=>f.projectId===project.id).map(f=>({f,score:relevant(question,`${f.id} ${f.title} ${f.description}`)+(linkedIds.has(f.id)?4:0)})).sort((a,b)=>b.score-a.score).slice(0,6).map(x=>x.f);
  const sourceIds=new Set(findings.flatMap(f=>[...f.sources,...f.contradictions]));
- const datasets=state.datasets.filter(d=>d.projectId===project.id);
+ const datasets=state.datasets.filter(d=>d.projectId===project.id&&isInternalDataset(d));
  const records=datasets.flatMap(d=>d.records.map(r=>({r,d})));
  const scored=records.map(x=>({...x,score:relevant(question,`${x.r.id} ${x.r.content} ${x.d.type} ${x.d.name} ${x.r.category??''}`)+(sourceIds.has(x.r.id)?5:0)})).sort((a,b)=>b.score-a.score);
  // General questions still need a few inspectable sources, including before analysis exists.
@@ -44,7 +45,7 @@ export function buildAssistantContext(state:Workspace,project:Project,question:s
 
 export function offlineAssistantAnswer(context:AssistantContext):AssistantAnswer {
  const r=context.requirements[0];
- const referenceQuestion=/\b(sales|study|equipment|catalog|external|market data)\b/i.test(context.question);
+ const referenceQuestion=/\b(sales|study|equipment|catalog|market data)\b/i.test(context.question);
  if(referenceQuestion){
   const references=context.sources.filter(s=>s.source_type!=='Customer verbatims').slice(0,3);
   if(references.length)return {answer:`I found ${references.length} source record(s) for ${context.project.derivative} in ${context.project.market}. Open the citations to inspect the exact measures and caveats before using them in a PM decision.`,citations:references.map(s=>({source_id:s.id,quote:s.text.slice(0,180)})),uncertainty:'Study scales, shared model sales, publication dates, and market applicability must be checked in the original records.'};
@@ -61,5 +62,5 @@ export function offlineAssistantAnswer(context:AssistantContext):AssistantAnswer
   citations,uncertainty:r.uncertainty||'Check how representative these source records are before making a decision.'};
 }
 export function lookupAssistantSource(state:Workspace,projectId:string,id:string):SourceRecord|undefined {
- return state.datasets.filter(d=>d.projectId===projectId).flatMap(d=>d.records).find(r=>r.id===id);
+ return state.datasets.filter(d=>d.projectId===projectId&&isInternalDataset(d)).flatMap(d=>d.records).find(r=>r.id===id);
 }

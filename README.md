@@ -15,6 +15,8 @@ The first start may install Node and Python packages. Open **http://127.0.0.1:51
 
 No credentials are needed for the offline demonstration. It starts with a clearly labeled synthetic BMW 5 Series G60/United States project. Local changes are saved in this browser's IndexedDB, with a small-demo local-storage copy for older browsers. They are not shared with teammates or secured by login.
 
+**Submission data source:** the working evidence database is internal: the supplied BMW files and any internal CSV/XLSX files you import. The app keeps the working copy locally in this browser. Feedback analysis uses only internal customer verbatims; studies, sales, and equipment remain labeled internal reference context. The assistant uses only these internal records. Public research collected in older workspaces is retained for export but excluded from the active workflow.
+
 For the supplied BMW sources, place these files in the ignored `data/raw/` folder on your own computer: `F70_feedback_hackathon.xlsx`, `F70_G60_G68_G70_customer_studies.xlsx`, `sales_volumes.xlsx`, `F70_OptionList.PDF`, and `f70_equipment_curated.csv`. The library shows which are available and reads them without writing a processed data file. A teammate without these private files can still use the synthetic demo. Do not add the private files or an exported workspace to Git.
 
 ## Follow the workflow
@@ -26,7 +28,6 @@ For the supplied BMW sources, place these files in the ignored `data/raw/` folde
 5. In **Settings**, enter your name as the responsible PM before making a decision on supplied data. Open **Requirements** or **Review Queue**. Inspect evidence and the separate product/market context, edit the wording, set or leave priority dimensions unknown, and approve, reject, or request evidence with a written reason. AI cannot make a PM decision.
 6. Open **Prioritization** for the score breakdown. The number of selected records is a sample count, not a population frequency. Unknown impact, strategy, and feasibility stay unknown until assessed.
 7. Open **Audit Trail** and **Data Sources → Analysis history** to see decisions, previous versions, linked records, run time, model calls, and token usage. Click **Ask InsightPilot** for source-linked answers about the selected project.
-8. In **External research**, choose a model and Europe, United States, or China. Fetch a matching BMW PressClub page, query NHTSA's US owner-complaint API for the supported 5/7 Series sales model and year, or enter a public HTTPS page. Inspect the preview and explicitly import. Euro NCAP and C-NCAP are linked for manual reference. See [the public source register](docs/public-sources.md) for exact URLs, coverage, and limitations. These records stay labeled as external context and do not enter feedback analysis.
 
 The browser demo can be reset in **Settings**. Export data before resetting if you need to keep it.
 
@@ -38,7 +39,7 @@ cp .env.example .env
 
 Put your own `OPENAI_API_KEY` value in `.env`, then restart `./start-local.sh`. The file is ignored by Git. Never put a key in a `VITE_` variable or browser code. The local Vite server calls Python, and Python calls the OpenAI Responses API with `store=False`. The assistant and analysis check exact quotes and IDs before showing/saving output. The analysis log records elapsed seconds, API calls, and input/output tokens. Actual API cost depends on your account and selected model.
 
-Only start a live analysis when the supplied feedback is permitted to be sent to your configured model provider. The offline demo and public collector work without a key. If the live button is missing, check `.env`, restart, and make sure you selected a validated **Customer verbatims** dataset.
+Only start a live analysis when the supplied feedback is permitted to be sent to your configured model provider. The offline demo works without a key. If the live button is missing, check `.env`, restart, and make sure you selected a validated **Customer verbatims** dataset.
 
 ## What is real, and what is a demo?
 
@@ -47,12 +48,12 @@ Only start a live analysis when the supplied feedback is permitted to be sent to
 | React workspace, file import, project selector, source links, review/edit/challenge/approval, scoring, local audit/export | Working locally; browser IndexedDB stores larger workspaces. |
 | Supplied BMW data library | Reads all available supplied source roles in their actual vehicle/market scopes. It keeps original fields and provenance, deduplicates repeated F70 annotations, and clearly labels shared or future-looking measures. Requires the private files on the local computer. |
 | Offline analysis | A transparent keyword demonstration, not an LLM or a verified reading of customer sentiment. |
-| Python live analysis and AI assistant | Implemented server side with evidence checks; needs `OPENAI_API_KEY`. This update did not make a paid model call. |
-| Public source collector | Fetches permitted HTML/JSON-LD pages after a robots check and queries NHTSA's documented US complaints API for supported model/year combinations. It throttles requests, caches for 24 hours, deduplicates records, and retains exact URLs and dates. Euro NCAP and C-NCAP are linked for manual review. Market and chassis applicability remain a PM judgment. |
-| Optional Supabase cloud backend | Schema, functions, auth rules, and database checks are in the repository. No hosted account was supplied, so deployment, hosted AI, and multiuser behavior remain unverified. The assistant and collector currently use the local server. |
+| Python live analysis and AI assistant | Implemented server side with evidence checks; needs `OPENAI_API_KEY`. Live chat was verified through the running local app with synthetic records. |
+| Public source collector | Retained as historical code but not part of the active submission workflow. External records already in a workspace remain in exports and do not feed the assistant, analysis, or PM reference views. |
+| Optional Supabase cloud backend | Schema, functions, auth rules, and database checks are in the repository. The submission uses the local browser workspace by default; hosted deployment and multiuser behavior remain unverified. |
 | Supplied BMW files | Read from your computer only; never packaged in the app or included in this branch's new commit. Do not commit raw or processed BMW customer data. |
 
-The collector's BMW PressClub presets are official product information, not customer reviews. A third-party page is labeled editorial review only when structured review data or a review title is present. An absent publication date is shown as unknown, never invented. The collector checks model names or codes but does not silently assume a page applies to the selected market. Public pages may change or block automated access.
+No public page is required to run or explain the submission product. Supplied BMW inputs stay in ignored `data/raw/` and are never committed.
 
 ## How the team branches contributed
 
@@ -86,7 +87,7 @@ npm run test:db
 npm run test:e2e
 ```
 
-The regular browser checks use synthetic data. They cover upload, analysis, record links, requirement review, audit, project isolation, mobile layout, assistant citations, and external collector preview/import. When private files are present locally, `node scripts/bmw-browser-check.mjs` also checks a real F70/Europe import, browser persistence, the full offline analysis, G68/China reference-only scope, and mobile source selection. Screenshots go only to ignored `artifacts/`. Python tests for private workbook outputs skip when processed outputs are absent; this does not mean the private files were committed. Local PostgreSQL checks use PGlite, not a hosted Supabase database.
+The regular browser checks use synthetic data. They cover upload, analysis, record links, requirement review, audit, project isolation, mobile layout, assistant citations, and internal-only source selection. When private files are present locally, `node scripts/bmw-browser-check.mjs` also checks a real F70/Europe import, browser persistence, the full offline analysis, G68/China reference-only scope, and mobile source selection. Screenshots go only to ignored `artifacts/`. Python tests for private workbook outputs skip when processed outputs are absent; this does not mean the private files were committed. Local PostgreSQL checks use PGlite, not a hosted Supabase database.
 
 ## Optional shared deployment
 
