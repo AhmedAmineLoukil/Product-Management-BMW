@@ -42,3 +42,14 @@ def extract_findings(client, record):
         return []
     return parse_model(client, ExtractionBatch, EXTRACT_PROMPT,
                        record.model_dump(exclude_unset=True)).findings
+
+def extract_batch(client, records):
+    from .schemas import MultiExtractionBatch
+    parsed = parse_model(client, MultiExtractionBatch,
+                         EXTRACT_PROMPT + '\nReturn exactly one records entry for each supplied source_id; never mix quotes between records.',
+                         {'records': [r.model_dump(exclude_unset=True) for r in records]})
+    expected = {r.source_id for r in records}
+    ids = [r.source_id for r in parsed.records]
+    if set(ids) != expected or len(ids) != len(set(ids)):
+        raise ValueError('Batch response source IDs do not match input')
+    return {r.source_id: r.findings for r in parsed.records}

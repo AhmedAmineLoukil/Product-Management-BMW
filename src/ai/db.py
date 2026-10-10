@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import sqlite3
 import uuid
+import hashlib
 from copy import deepcopy
 from .scoring import observed_evidence, assess_priority
 
@@ -69,6 +70,16 @@ def init_db(db_path=DEFAULT_DB):
             FOREIGN KEY(requirement_id) REFERENCES requirements(requirement_id)
           );
           CREATE INDEX IF NOT EXISTS idx_audit_req ON audit_events(requirement_id,event_id);
+          CREATE TABLE IF NOT EXISTS run_keys (fingerprint TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(run_id));
+          CREATE TABLE IF NOT EXISTS workflow_events (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT,
+            event_type TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL, body_json TEXT NOT NULL
+          );
+          CREATE TRIGGER IF NOT EXISTS workflow_no_update BEFORE UPDATE ON workflow_events
+          BEGIN SELECT RAISE(ABORT, 'audit events are append-only'); END;
+          CREATE TRIGGER IF NOT EXISTS workflow_no_delete BEFORE DELETE ON workflow_events
+          BEGIN SELECT RAISE(ABORT, 'audit events are append-only'); END;
         ''')
         # SQLite triggers prevent UPDATE and DELETE of audit history.
         c.executescript('''
@@ -89,17 +100,30 @@ def _event(c, req_id, event, actor_type, actor_id, before, after, reason, metada
          reason, dumps(metadata or {})))
 
 
-def save_run(records, result, *, db_path=DEFAULT_DB, settings=None):
+def save_run(records, result, *, db_path=DEFAULT_DB, settings=None, metrics=None):
     init_db(db_path)
     run_id = uuid.uuid4().hex[:12]
     by_fid = {f['finding_id']: f for f in result['findings']}
     with connect(db_path) as c:
+        c.execute('BEGIN IMMEDIATE')
+        fingerprint = hashlib.sha256(dumps({'records': records, 'result': result,
+                                            'settings': settings or {}}).encode()).hexdigest()
+        previous = c.execute('SELECT run_id FROM run_keys WHERE fingerprint=?', (fingerprint,)).fetchone()
+        if previous:
+            return previous[0]
         c.execute('INSERT INTO runs VALUES (?,?,?,?)',
                   (run_id, utcnow(), dumps(settings or {}), dumps({
                       'source_count': len(records), 'finding_count': len(result['findings']),
                       'requirements_count': len(result['proposed_requirements']),
                       'validation_errors': result['validation_errors'],
+                      'metrics': metrics or {},
+                      'conflicts': result.get('conflicts', []),
+                      'evidence_links': result.get('evidence_links', []),
                   })))
+        c.execute('INSERT INTO run_keys VALUES (?,?)', (fingerprint, run_id))
+        c.execute('INSERT INTO workflow_events (run_id,event_type,actor_type,actor_id,timestamp,body_json) VALUES (?,?,?,?,?,?)',
+                  (run_id, 'analysis_persisted', 'system', 'pipeline', utcnow(), dumps({
+                      'settings': settings or {}, 'metrics': metrics or {}, 'source_ids': [r['source_id'] for r in records]})))
         for r in records:
             c.execute('INSERT INTO sources VALUES (?,?,?)', (run_id, r['source_id'], dumps(r)))
         for f in result['findings']:
@@ -109,17 +133,21 @@ def save_run(records, result, *, db_path=DEFAULT_DB, settings=None):
         for draft in result['proposed_requirements']:
             req = deepcopy(draft)
             local_id = req['requirement_id']
-            req_id = f'BMW-F70-{run_id}-{local_id}'
+            vehicle = req.get('vehicle') or (settings or {}).get('vehicle') or 'F70'
+            req_id = f'BMW-{vehicle}-{run_id}-{local_id}'
             req['requirement_id'] = req_id
-            req['vehicle_code'] = 'F70'
+            req['vehicle_code'] = vehicle
             req['run_id'] = run_id
             req['status'] = 'pending'
             req['version'] = 1
             req['decision_status'] = 'pending'
-            req['scoring_observations'] = observed_evidence(req, by_fid, len(records))
+            feedback_count = sum('text' in r for r in records)
+            req['scoring_observations'] = observed_evidence(req, by_fid, feedback_count)
             req['priority_assessment'] = assess_priority(req['scoring_observations'], {}, {})
             req['scoring_rationale'] = 'Unassessed factors require a human PM; evidence triage is not final priority.'
             req['created_at'] = utcnow()
+            req['updated_at'] = req['created_at']
+            req['planning_horizon'] = '3–5 years'
             c.execute('INSERT INTO requirements VALUES (?,?,?,?,?,?)',
                       (req_id, run_id, 1, 'pending', dumps(req), utcnow()))
             _event(c, req_id, 'requirement_proposed', 'AI', 'pipeline', None, req,
@@ -156,7 +184,10 @@ def get_linked_evidence(requirement_id, db_path=DEFAULT_DB):
             if row:
                 findings.append(json.loads(row[0]))
         sources = []
-        for sid in req['linked_source_ids']:
+        source_ids = list(req['linked_source_ids'])
+        for key in ('supporting_evidence', 'contradictory_evidence', 'contextual_evidence'):
+            source_ids.extend(link['source_id'] for link in req.get(key, []) if link['source_id'] not in source_ids)
+        for sid in source_ids:
             row = c.execute('SELECT body_json FROM sources WHERE run_id=? AND source_id=?',
                             (req['run_id'], sid)).fetchone()
             if row:
@@ -174,7 +205,8 @@ def audit_history(requirement_id, db_path=DEFAULT_DB):
 
 
 def revise_requirement(requirement_id, *, actor, action, rationale, db_path=DEFAULT_DB,
-                       description=None, ratings=None, score_rationales=None):
+                       description=None, ratings=None, score_rationales=None,
+                       review_date=None, expected_version=None):
     """All writes are explicit human actions and appended atomically to history."""
     if not actor or not actor.strip() or not rationale or not rationale.strip():
         raise ValueError('Named PM actor and nonempty documented rationale required')
@@ -182,11 +214,14 @@ def revise_requirement(requirement_id, *, actor, action, rationale, db_path=DEFA
         raise ValueError('Unsupported PM action')
     init_db(db_path)
     with connect(db_path) as c:
+        c.execute('BEGIN IMMEDIATE')
         row = c.execute('SELECT body_json,status,version FROM requirements WHERE requirement_id=?',
                         (requirement_id,)).fetchone()
         if not row:
             raise KeyError(requirement_id)
         before = json.loads(row['body_json'])
+        if expected_version is not None and row['version'] != expected_version:
+            raise ValueError('Requirement changed since you opened it. Refresh before saving.')
         updated = deepcopy(before)
         if action == 'edit':
             if not isinstance(description, str) or not description.strip():
@@ -202,6 +237,13 @@ def revise_requirement(requirement_id, *, actor, action, rationale, db_path=DEFA
         elif action == 'challenge':
             updated['status'] = 'under_review'
             updated['needs_review'] = True
+            updated.setdefault('challenges', []).append({
+                'question': rationale.strip(), 'actor': actor.strip(), 'timestamp': utcnow(),
+                'state': 'pending_ai_review',
+                'finding_ids': updated.get('linked_finding_ids', []),
+                'source_ids': updated.get('linked_source_ids', []),
+                'limitations': updated.get('uncertainties', []),
+                'conflict_ids': updated.get('conflict_ids', [])})
         elif action == 'approve':
             if updated.get('validation_errors') or updated.get('evidence_level') == 'unsupported':
                 raise ValueError('Cannot approve unsupported requirement')
@@ -212,10 +254,17 @@ def revise_requirement(requirement_id, *, actor, action, rationale, db_path=DEFA
             updated['status'] = 'rejected'
         elif action == 'postpone':
             updated['status'] = 'postponed'
+            if review_date:
+                from datetime import date
+                date.fromisoformat(review_date)
+            updated['review_date'] = review_date
         updated['version'] = int(row['version']) + 1
         updated['decision_status'] = updated['status']
         updated['updated_at'] = utcnow()
         c.execute('UPDATE requirements SET version=?,status=?,body_json=?,updated_at=? WHERE requirement_id=?',
                   (updated['version'], updated['status'], dumps(updated), utcnow(), requirement_id))
-        _event(c, requirement_id, 'pm_'+action, 'human', actor.strip(), before, updated, rationale.strip())
+        _event(c, requirement_id, 'pm_'+action, 'human', actor.strip(), before, updated, rationale.strip(),
+               {'unauthenticated_demo_actor': True, 'requirement_version': updated['version'],
+                'scoring_policy': updated.get('priority_assessment', {}).get('policy_version'),
+                'related_evidence': updated.get('linked_source_ids', [])})
     return updated

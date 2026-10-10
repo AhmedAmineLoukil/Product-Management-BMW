@@ -7,30 +7,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from src.ai.db import list_requirements, DEFAULT_DB
+from src.copilot import portfolio_export
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--db',default=str(DEFAULT_DB))
     p.add_argument('--output',default='data/processed/requirement_portfolio.csv')
+    p.add_argument('--actor', required=True, help='Named unauthenticated demo PM for export audit')
     a=p.parse_args()
     requirements=list_requirements(ROOT/a.db)
     destination=ROOT/a.output
+    destination = destination.resolve()
+    if not any(destination.is_relative_to((ROOT/folder).resolve()) for folder in ('data', 'exports')):
+        p.error('Confidential exports must stay inside ignored data/ or exports/ directories')
     destination.parent.mkdir(parents=True,exist_ok=True)
-    cols=['requirement_id','vehicle_code','description','category','status','version',
-          'priority_score','priority_level','evidence_level','linked_finding_ids','linked_source_ids',
-          'assumptions','uncertainties','scoring_rationale','priority_factor_details']
-    with destination.open('w',encoding='utf-8-sig',newline='') as f:
-        writer=csv.DictWriter(f,fieldnames=cols)
-        writer.writeheader()
-        for req in requirements:
-            assessment=req.get('priority_assessment',{})
-            row={k:req.get(k) for k in cols}
-            row['priority_score']=assessment.get('score')
-            row['priority_level']=assessment.get('priority')
-            row['priority_factor_details']=assessment
-            for field in ['linked_finding_ids','linked_source_ids','assumptions','uncertainties','priority_factor_details']:
-                row[field]=json.dumps(row[field],ensure_ascii=False)
-            writer.writerow(row)
+    if destination.suffix not in ('.csv', '.json'):
+        p.error('Output must end in .csv or .json')
+    destination.write_text(portfolio_export(ROOT/a.db, requirements, a.actor,
+                                            destination.suffix[1:]), encoding='utf-8')
     print(f'Exported {len(requirements)} private requirements to {destination}')
 
 if __name__=='__main__': main()

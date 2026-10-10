@@ -13,6 +13,9 @@ def load_jsonl(filename):
         return [json.loads(x) for x in f if x.strip()]
 
 
+@unittest.skipUnless(all((PROCESSED / name).exists() for name in
+                        ['feedback.jsonl', 'study_eu.jsonl', 'sales.jsonl', 'catalog_pages.jsonl']),
+                     'Private BMW integration fixtures unavailable')
 class BMWIngestionChecks(unittest.TestCase):
     def test_feedback_deduplication(self):
         records = load_jsonl('feedback.jsonl')

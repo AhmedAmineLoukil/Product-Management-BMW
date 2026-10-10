@@ -42,6 +42,15 @@ class ExtractionBatch(BaseModel):
     model_config = ConfigDict(extra='forbid')
     findings: list[FindingExtraction]
 
+class RecordFindings(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    source_id: str
+    findings: list[FindingExtraction]
+
+class MultiExtractionBatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    records: list[RecordFindings]
+
 class RequirementDraft(BaseModel):
     model_config = ConfigDict(extra="ignore")
     description: str

@@ -1,0 +1,14 @@
+{
+  "https://www.bmwgroup.com/en/report/2025/downloads/BMW-Group-Report-2025-en.pdf": {
+    "title": "BMW Group Report 2025",
+    "publisher": "BMW Group",
+    "publication_date": "2026-03-12",
+    "limitations": ["Group-level reporting does not establish vehicle-specific customer needs."]
+  },
+  "https://www.bmwgroup.com/en/report/2025/to-our-stakeholders/statement-chairman-board-of-management/index.html": {
+    "title": "BMW Group Report 2025 — Statement of the Chairman",
+    "publisher": "BMW Group",
+    "publication_date": "2026-03-12",
+    "limitations": ["Corporate commentary requires independent interpretation and scope review."]
+  }
+}

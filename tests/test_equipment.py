@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROCESSED = ROOT / 'data' / 'processed'
 
+@unittest.skipUnless((PROCESSED / 'equipment.jsonl').exists(), 'Private equipment fixture unavailable')
 class EquipmentChecks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

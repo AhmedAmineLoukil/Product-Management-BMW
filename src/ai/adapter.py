@@ -30,8 +30,8 @@ def load_jsonl(path: str | Path) -> list[dict]:
 
 
 def adapt_feedback(raw: dict) -> dict:
-    if raw.get('record_type') != 'customer_feedback' or raw.get('vehicle_code') != 'F70':
-        raise ValueError('Expected a normalized F70 customer_feedback record')
+    if raw.get('record_type') != 'customer_feedback' or not raw.get('vehicle_code'):
+        raise ValueError('Expected a normalized customer_feedback record with vehicle_code')
     source_id = raw.get('source_id')
     text = raw.get('text_original')
     if not isinstance(source_id, str) or not isinstance(text, str):
@@ -47,7 +47,7 @@ def adapt_feedback(raw: dict) -> dict:
     row_reference = raw.get('source_cell') or f"{raw.get('source_sheet', 'Feedback_Explorer')}!row unknown"
     candidate = {
         'source_id': source_id,
-        'vehicle': 'F70',
+        'vehicle': raw['vehicle_code'],
         'text': text,
         'market': raw.get('country_code') or None,
         'source_type': 'customer_feedback',

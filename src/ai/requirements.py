@@ -16,7 +16,7 @@ If evidence is insufficient or conflicted, flag the uncertainty. Do not approve 
 Do not produce duplicates. Return an empty list if nothing is well supported.
 '''
 
-def generate_requirements(client, findings, clusters):
+def generate_requirements(client, findings, clusters, *, evidence_links=(), conflicts=()):
     supported = [f for f in findings if f['evidence_valid'] and f['finding_type'] != 'unclear']
     if not supported:
         return []
@@ -26,4 +26,5 @@ def generate_requirements(client, findings, clusters):
          'evidence_quote', 'needs_review', 'uncertainties')}
         for f in supported]
     return parse_model(client, RequirementBatch, PROMPT,
-                       {'findings': compact_findings, 'clusters': clusters}).requirements[:8]
+                       {'findings': compact_findings, 'clusters': clusters,
+                        'evidence_links': list(evidence_links), 'conflicts': list(conflicts)}).requirements[:8]

@@ -32,6 +32,9 @@ def validate_requirement(requirement, findings, records):
         errors.append('unclear_support')
     if not requirement['description'].strip():
         errors.append('empty_requirement')
+    scopes = {(f['source_reference']['vehicle'], f['source_reference'].get('market')) for f in linked}
+    if len(scopes) > 1:
+        errors.append('mixed_vehicle_or_market_support')
     requirement['decision_status'] = 'pending'
     requirement['needs_review'] = (
         bool(errors or requirement['assumptions'] or requirement['uncertainties'])
